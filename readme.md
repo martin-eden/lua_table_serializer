@@ -1,3 +1,4 @@
+```lua
 -- Lua table serializer
 
 details = {
@@ -52,3 +53,4 @@ print(table_to_str(_G))
     },
   },
 }
+```
