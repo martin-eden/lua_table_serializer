@@ -1298,7 +1298,7 @@ _G.package.preload['workshop.concepts.codec_lua_graph.compile.Formatters.readabl
             empty_table_str = '{ }',
             opening_table_str = '{',
             closing_table_str = '}',
-            delimiter_str = ', ',
+            delimiter_str = ',',
             equal_str = ' = ',
             notify = on_notify,
           }
