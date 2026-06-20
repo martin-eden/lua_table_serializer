@@ -57,6 +57,11 @@ Serializer function supports three _behavior flags_:
 | `☐ omit_tail_delimiter`   | `xpcall = 'function: 0x55b2598d9e90',  }`        |
 
 
+## Requirements
+
+  * Lua 5.3 (or 5.4, 5.5)
+
+
 ## Install/remove
 
   * Save file `serialize_lua_graph.lua` from [`deploy/`][deploy]
