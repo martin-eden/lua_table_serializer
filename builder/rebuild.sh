@@ -55,6 +55,10 @@ mv \
   ../deploy/serialize_lua_graph.melded.stripped.lua \
   ../deploy/serialize_lua_graph.lua
 
+# Call test script
+cd ../test
+lua run.lua
+
 # 2026-04-25
 # 2026-06-04
 # 2026-06-16
