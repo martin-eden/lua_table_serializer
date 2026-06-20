@@ -1,19 +1,26 @@
-return
+-- Generate string name for given function, thread, table or userdata
+
+--[[
+  Author: Martin Eden
+  Last mod.: 2026-06-19
+]]
+
+local Interface =
   {
     names = {},
     counters =
       {
         ['function'] = 0,
-        ['thread'] = 0,
-        ['userdata'] = 0,
-        ['table'] = 0,
+        table = 0,
+        thread = 0,
+        userdata = 0,
       },
     templates =
       {
         ['function'] = 'f_%d',
-        ['thread'] = 'th_%d',
-        ['userdata'] = 'u_%d',
-        ['table'] = 't_%d',
+        table = 'T_%d',
+        thread = 'th_%d',
+        userdata = 'u_%d',
       },
     give_name =
       function(self, obj)
@@ -21,7 +28,7 @@ return
           local obj_type = type(obj)
           if not self.counters[obj_type] then
             error(
-              ('Argument type "%s" not supported for counting.'):
+              ('Argument type "%s" is not supported for counting.'):
               format(obj_type),
               2
             )
@@ -33,3 +40,11 @@ return
         return self.names[obj]
       end,
   }
+
+-- Export:
+return Interface
+
+--[[
+  2016
+  2026-06-19
+]]

@@ -1,15 +1,22 @@
-local default_comparator = request('ordered_pass.default_comparator')
-local extract_keys = request('extract_keys')
-local to_key_val = request('to_key_val')
+-- Function to use for ordered table traversal instead of pairs()
+
+--[[
+  Author: Martin Eden
+  Last mod.: 2026-05-23
+]]
+
+-- Imports:
+local get_key_vals = request('get_key_vals')
+local compare_keys = request('ordered_pass.compare_keys')
 
 -- Sort <t> and return iterator function to pass that sorted <t>
-return
+local ordered_pass =
   function(t, comparator)
     assert_table(t)
-    comparator = comparator or default_comparator
+    comparator = comparator or compare_keys
     assert_function(comparator)
 
-    local key_vals = to_key_val(t)
+    local key_vals = get_key_vals(t)
     table.sort(key_vals, comparator)
 
     local i = 0
@@ -23,3 +30,10 @@ return
 
     return sorted_next, t
   end
+
+-- Export:
+return ordered_pass
+
+--[[
+  2016-09 # # #
+]]

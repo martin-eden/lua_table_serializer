@@ -1,59 +1,57 @@
--- Lua base libraries extensions. Used almost in any piece of my code.
+-- Personal framework bootloader
 
--- Export "is_<type>" and "assert_<type>" functions:
-do
-  local data_types =
-    {
-      'boolean',
-      'function',
-      'nil',
-      'number',
-      'string',
-      'table',
-      'thread',
-      'userdata',
-    }
-  for k, type_name in ipairs(data_types) do
-    _G['is_' .. type_name] =
-      function(a)
-        return (type(a) == type_name)
-      end
-    _G['assert_' .. type_name] =
-      function(a, responsibility_level)
-        local responsibility_level = (responsibility_level or 1)
-        if (type(a) ~= type_name) then
-          error(
-            ('Argument must have a type "%s", not "%s".'):format(type_name, type(a)),
-            responsibility_level + 1
-          )
-        end
-      end
-  end
-  _G.is_integer =
-    function(n)
-      return (math.type(n) == 'integer')
-    end
-  _G.assert_integer =
-    function(a, responsibility_level)
-      local responsibility_level = (responsibility_level or 1)
-      if (math.type(a) ~= 'integer') then
-        error(('Argument must be integer, not %s.'):format(type(a)), responsibility_level + 1)
-      end
-    end
-end
+--[[
+  Author: Martin Eden
+  Last mod.: 2026-05-29
+]]
 
--- Make sure we have table.pack and table.unpack:
-do
-  _G.table.pack = _G.table.pack or _G.pack
-  _G.table.unpack =
-    _G.table.unpack or
-    _G.unpack or
-    function(...)
-      return {n = select('#', ...), ...}
-    end
-end
+--[[
+  Point of code organization with small files and directories
+  is relative "require()" and ability to deploy only used files.
+]]
 
--- Export request function:
+--[[
+  Installed globals
+
+  * Global "request()"
+
+    Relative "require()" which allows loading modules by name
+    related to caller's module directory.
+
+    Uses extended name syntax: "^." -- upper directory,
+    "!." -- directory of this "base.lua" module.
+
+  * Global "get_dependencies()"
+
+    Table with names map. Implementation of "request()" tracks run-time
+    dependencies.
+
+  * Global "get_base_prefix()"
+
+    Implementation of "request()" knows it's own module name prefix
+    for "require()". It's critical information for niche tools.
+
+  * Global "get_require_name()"
+
+    Not essential -- can be recreated with already provided information.
+    Used by [require_file]. Shared because we don't like duplicate code.
+
+  * Convenience globals
+
+    These functions are actually modules but made global because
+    they are using often:
+
+    * is_..() family
+
+      is_boolean(), is_number, is_integer(), is_float(), is_table() ...
+
+    * assert_..() family
+
+      assert_boolean(), assert_number(), assert_integer(), ...
+
+    * new() -- clones table and applies optional field overrides
+]]
+
 local split_name =
   function(qualified_name)
     local prefix_name_pattern = '^(.+%.)([^%.]+)$'  -- a.b.c --> (a.b.) (c)
@@ -76,7 +74,7 @@ local unite_prefixes =
     while rel_prefix:find('^%^%.') do
       if (base_prefix == '') then
         error(
-          ([[Link "%s" is outside caller's prefix "%s".]]):format(
+          ([[Link "%s" is outside of caller's prefix "%s".]]):format(
             init_rel_prefix,
             init_base_prefix
           )
@@ -88,14 +86,14 @@ local unite_prefixes =
     return base_prefix .. rel_prefix
   end
 
-local names = {}
-local deep = 1
+local Names = { }
+local depth = 1
 
 local get_caller_prefix =
   function()
     local result = ''
-    if names[deep] then
-      result = names[deep].prefix
+    if Names[depth] then
+      result = Names[depth].prefix
     end
     return result
   end
@@ -103,55 +101,103 @@ local get_caller_prefix =
 local get_caller_name =
   function()
     local result = 'anonymous'
-    if names[deep] then
-      result = names[deep].prefix .. names[deep].name
+
+    if Names[depth] then
+      result = Names[depth].prefix .. Names[depth].name
     end
+
     return result
   end
 
 local push =
   function(prefix, name)
-    deep = deep + 1
-    names[deep] = {prefix = prefix, name = name}
+    depth = depth + 1
+    Names[depth] = { prefix = prefix, name = name }
   end
 
 local pop =
   function()
-    deep = deep - 1
+    depth = depth - 1
   end
 
-local dependencies = {}
+local Dependencies_Map = { }
+
 local add_dependency =
   function(src_name, dest_name)
-    dependencies[src_name] = dependencies[src_name] or {}
-    dependencies[src_name][dest_name] = true
+    Dependencies_Map[src_name] = Dependencies_Map[src_name] or { }
+
+    Dependencies_Map[src_name][dest_name] = true
   end
 
 local base_prefix = split_name((...))
 
-local request =
+local get_require_name =
   function(qualified_name)
+    local caller_prefix
+
     local is_absolute_name = (qualified_name:sub(1, 2) == '!.')
+
     if is_absolute_name then
       qualified_name = qualified_name:sub(3)
+      caller_prefix = base_prefix
+    else
+      caller_prefix = get_caller_prefix()
     end
+
     local prefix, name = split_name(qualified_name)
-    local src_name = get_caller_name()
-    local caller_prefix =
-      is_absolute_name and base_prefix or get_caller_prefix()
+
     prefix = unite_prefixes(caller_prefix, prefix)
-    push(prefix, name)
-    local dest_name = get_caller_name()
-    add_dependency(src_name, dest_name)
-    local require_name = prefix .. name
-    local results = table.pack(require(require_name))
-    pop()
-    return table.unpack(results)
+
+    return prefix .. name, prefix, name
   end
 
-if not _G.request then
+local request =
+  function(qualified_name)
+    local src_name = get_caller_name()
+
+    local require_name, prefix, name = get_require_name(qualified_name)
+
+    push(prefix, name)
+
+    local dest_name = get_caller_name()
+
+    add_dependency(src_name, dest_name)
+
+    local Results = table.pack(require(require_name))
+
+    pop()
+
+    return table.unpack(Results)
+  end
+
+local is_first_run = (_G.request == nil)
+
+-- Export globals:
+if is_first_run then
   _G.request = request
-  _G.dependencies = dependencies
+  _G.get_dependencies = function() return Dependencies_Map end
+  _G.get_base_prefix = function() return base_prefix end
+  _G.get_require_name = get_require_name
+
+  -- We can now use request() but need to add our name to call stack
+
+  -- First element is invocation module name
+  local our_require_name = (...)
+
+  push('', our_require_name)
+
+  request('!.system.install_is_functions')()
+  request('!.system.install_assert_functions')()
+  _G.new = request('!.table.new')
+
+  pop()
 end
 
-_G.new = request(base_prefix .. 'table.new')
+--[[
+  2016 #
+  2017 #
+  2018 # #
+  2024 #
+  2026-05-08
+  2026-05-28
+]]
