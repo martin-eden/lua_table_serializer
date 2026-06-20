@@ -1,52 +1,10 @@
-_G.package.preload['test'] =
+_G.package.preload['serialize_lua_graph'] =
   function(...)
     require('workshop.base')
-    return request('!.formats.lua_table_code.save')
+    return request('!.convert.table_to_str')
   end
 _G.package.preload['workshop.base'] =
   function(...)
-    do
-      local data_types =
-        {'boolean', 'function', 'nil', 'number', 'string', 'table', 'thread', 'userdata'}
-      for k, type_name in ipairs(data_types) do
-        _G['is_' .. type_name] =
-          function(a)
-            return (type(a) == type_name)
-          end
-        _G['assert_' .. type_name] =
-          function(a, responsibility_level)
-            local responsibility_level = (responsibility_level or 1)
-            if (type(a) ~= type_name) then
-              error(
-                ('Argument must have a type "%s", not "%s".'):format(type_name, type(a)),
-                responsibility_level + 1
-              )
-            end
-          end
-      end
-      _G.is_integer =
-        function(n)
-          return (math.type(n) == 'integer')
-        end
-      _G.assert_integer =
-        function(a, responsibility_level)
-          local responsibility_level = (responsibility_level or 1)
-          if (math.type(a) ~= 'integer') then
-            error(
-              ('Argument must be integer, not %s.'):format(type(a)), responsibility_level + 1
-            )
-          end
-        end
-    end
-    do
-      _G.table.pack = _G.table.pack or _G.pack
-      _G.table.unpack =
-        _G.table.unpack or
-        _G.unpack or
-        function(...)
-          return {n = select('#', ...), ...}
-        end
-    end
     local split_name =
       function(qualified_name)
         local prefix_name_pattern = '^(.+%.)([^%.]+)$'
@@ -68,7 +26,7 @@ _G.package.preload['workshop.base'] =
         while rel_prefix:find('^%^%.') do
           if (base_prefix == '') then
             error(
-              ([[Link "%s" is outside caller's prefix "%s".]]):format(
+              ([[Link "%s" is outside of caller's prefix "%s".]]):format(
                 init_rel_prefix, init_base_prefix
               )
             )
@@ -78,183 +36,157 @@ _G.package.preload['workshop.base'] =
         end
         return base_prefix .. rel_prefix
       end
-    local names = {}
-    local deep = 1
+    local Names = {}
+    local depth = 1
     local get_caller_prefix =
       function()
         local result = ''
-        if names[deep] then
-          result = names[deep].prefix
+        if Names[depth] then
+          result = Names[depth].prefix
         end
         return result
       end
     local get_caller_name =
       function()
         local result = 'anonymous'
-        if names[deep] then
-          result = names[deep].prefix .. names[deep].name
+        if Names[depth] then
+          result = Names[depth].prefix .. Names[depth].name
         end
         return result
       end
     local push =
       function(prefix, name)
-        deep = deep + 1
-        names[deep] = {prefix = prefix, name = name}
+        depth = depth + 1
+        Names[depth] = {prefix = prefix, name = name}
       end
     local pop =
       function()
-        deep = deep - 1
+        depth = depth - 1
       end
-    local dependencies = {}
+    local Dependencies_Map = {}
     local add_dependency =
       function(src_name, dest_name)
-        dependencies[src_name] = dependencies[src_name] or {}
-        dependencies[src_name][dest_name] = true
+        Dependencies_Map[src_name] = Dependencies_Map[src_name] or {}
+        Dependencies_Map[src_name][dest_name] = true
       end
     local base_prefix = split_name((...))
-    local request =
+    local get_require_name =
       function(qualified_name)
+        local caller_prefix
         local is_absolute_name = (qualified_name:sub(1, 2) == '!.')
         if is_absolute_name then
           qualified_name = qualified_name:sub(3)
+          caller_prefix = base_prefix
+        else
+          caller_prefix = get_caller_prefix()
         end
         local prefix, name = split_name(qualified_name)
-        local src_name = get_caller_name()
-        local caller_prefix = is_absolute_name and base_prefix or get_caller_prefix()
         prefix = unite_prefixes(caller_prefix, prefix)
+        return prefix .. name, prefix, name
+      end
+    local request =
+      function(qualified_name)
+        local src_name = get_caller_name()
+        local require_name, prefix, name = get_require_name(qualified_name)
         push(prefix, name)
         local dest_name = get_caller_name()
         add_dependency(src_name, dest_name)
-        local require_name = prefix .. name
-        local results = table.pack(require(require_name))
+        local Results = table.pack(require(require_name))
         pop()
-        return table.unpack(results)
+        return table.unpack(Results)
       end
-    if not _G.request then
+    local is_first_run = (_G.request == nil)
+    if is_first_run then
       _G.request = request
-      _G.dependencies = dependencies
+      _G.get_dependencies =
+        function()
+          return Dependencies_Map
+        end
+      _G.get_base_prefix =
+        function()
+          return base_prefix
+        end
+      _G.get_require_name = get_require_name
+      local our_require_name = (...)
+      push('', our_require_name)
+      request('!.system.install_is_functions')()
+      request('!.system.install_assert_functions')()
+      _G.new = request('!.table.new')
+      pop()
     end
-    _G.new = request(base_prefix .. 'table.new')
   end
-_G.package.preload['workshop.system.get_loaded_module_files'] =
+_G.package.preload['workshop.system.install_is_functions'] =
   function(...)
-    local split_string = request('^.string.split')
-    local get_paths =
-      function()
-        local result = split_string(package.path, ';')
-        return result
+    local TypeNames = request('!.concepts.lua.TypeNames')
+    local NumberTypeNames = request('!.concepts.lua.NumberTypeNames')
+    local type_is =
+      function(type_name)
+        return
+          function(val)
+            return (type(val) == type_name)
+          end
       end
-    local get_module_names =
+    local number_is =
+      function(type_name)
+        return
+          function(val)
+            if not is_number(val) then
+              return false
+            end
+            return (math.type(val) == type_name)
+          end
+      end
+    local install_is_functions =
       function()
-        local result = {}
-        for k in pairs(package.loaded) do
-          result[#result + 1] = k
+        for _, type_name in ipairs(TypeNames) do
+          _G['is_' .. type_name] = type_is(type_name)
         end
-        return result
+        for _, math_type_name in ipairs(NumberTypeNames) do
+          _G['is_' .. math_type_name] = number_is(math_type_name)
+        end
       end
-    local file_exists = request('^.file.exists')
-    return
-      function()
-        local result = {}
-        local paths = get_paths()
-        local modules = get_module_names()
-        for i = 1, #modules do
-          local aligned_module_name = modules[i]:gsub('%.', '/')
-          for j = 1, #paths do
-            local possible_script_name = paths[j]:gsub('%?', aligned_module_name)
-            if file_exists(possible_script_name) then
-              result[#result + 1] = possible_script_name
+    return install_is_functions
+  end
+_G.package.preload['workshop.system.install_assert_functions'] =
+  function(...)
+    local TypeNames = request('!.concepts.lua.TypeNames')
+    local NumberTypeNames = request('!.concepts.lua.NumberTypeNames')
+    local spawn_assert_func =
+      function(type_name)
+        local checker = _G['is_' .. type_name]
+        assert(checker)
+        return
+          function(val)
+            if not checker(val) then
+              local err_msg = string.format('assert_%s(%s)', type_name, tostring(val))
+              error(err_msg)
             end
           end
+      end
+    local install_assert_funcs =
+      function()
+        for _, type_name in ipairs(TypeNames) do
+          _G['assert_' .. type_name] = spawn_assert_func(type_name)
         end
-        return result
-      end
-  end
-_G.package.preload['workshop.file.exists'] =
-  function(...)
-    return
-      function(file_name)
-        local file_handle = io.open(file_name, 'r')
-        local result = (file_handle ~= nil)
-        if result then
-          io.close(file_handle)
+        for _, number_type_name in ipairs(NumberTypeNames) do
+          _G['assert_' .. number_type_name] = spawn_assert_func(number_type_name)
         end
-        return result
       end
-  end
-_G.package.preload['workshop.mechs.compile'] =
-  function(...)
-    local unfold = request('^.table.unfold')
-    return
-      function(t, node_handlers)
-        if is_string(t) then
-          return t
-        end
-        assert_table(t)
-        node_handlers = node_handlers or {}
-        assert_table(node_handlers)
-        local result = {}
-        local compile
-        compile =
-          function(node)
-            if is_string(node) then
-              result[#result + 1] = node
-            elseif is_table(node) then
-              if node.type then
-                local node_handler = node_handlers[node.type]
-                assert(node_handler, ('No handler found for type "%s".'):format(node.type))
-                result[#result + 1] = node_handler(node)
-              else
-                for i = 1, #node do
-                  compile(node[i])
-                end
-              end
-            end
-          end
-        compile(t)
-        result = unfold(result)
-        return table.concat(result)
-      end
-  end
-_G.package.preload['workshop.mechs.indents_table'] =
-  function(...)
-    local init =
-      function(self)
-        setmetatable(
-          self.indents,
-          {
-            __index =
-              function(t, key)
-                if is_integer(key) then
-                  local value = self.indent_chunk:rep(key)
-                  t[key] = value
-                  return value
-                end
-              end,
-          }
-        )
-      end
-    return {indents = {}, init = init, indent_chunk = '  '}
+    return install_assert_funcs
   end
 _G.package.preload['workshop.mechs.name_giver'] =
   function(...)
-    return
+    local Interface =
       {
         names = {},
-        counters = {['function'] = 0, ['thread'] = 0, ['userdata'] = 0, ['table'] = 0},
-        templates =
-          {
-            ['function'] = 'f_%d',
-            ['thread'] = 'th_%d',
-            ['userdata'] = 'u_%d',
-            ['table'] = 't_%d',
-          },
+        counters = {['function'] = 0, table = 0, thread = 0, userdata = 0},
+        templates = {['function'] = 'f_%d', table = 'T_%d', thread = 'th_%d', userdata = 'u_%d'},
         give_name =
           function(self, obj)
             if not self.names[obj] then
               local obj_type = type(obj)
               if not self.counters[obj_type] then
-                error(('Argument type "%s" not supported for counting.'):format(obj_type), 2)
+                error(('Argument type "%s" is not supported for counting.'):format(obj_type), 2)
               end
               self.counters[obj_type] = self.counters[obj_type] + 1
               self.names[obj] = (self.templates[obj_type]):format(self.counters[obj_type])
@@ -262,231 +194,7 @@ _G.package.preload['workshop.mechs.name_giver'] =
             return self.names[obj]
           end,
       }
-  end
-_G.package.preload['workshop.mechs.text_block.dec_indent'] =
-  function(...)
-    return
-      function(self)
-        self.next_line_indent = self.next_line_indent - 1
-      end
-  end
-_G.package.preload['workshop.mechs.text_block.inc_indent'] =
-  function(...)
-    return
-      function(self)
-        self.next_line_indent = self.next_line_indent + 1
-      end
-  end
-_G.package.preload['workshop.mechs.text_block.interface'] =
-  function(...)
-    return
-      {
-        line_with_text = request('line.interface'),
-        processed_text = {},
-        num_line_feeds = 0,
-        store_textline = request('text.store_textline'),
-        add_textline = request('text.add_textline'),
-        add_curline = request('text.add_curline'),
-        new_line = request('text.new_line'),
-        request_clean_line = request('text.request_clean_line'),
-        request_empty_line = request('text.request_empty_line'),
-        on_clean_line = request('text.on_clean_line'),
-        include = request('text.include'),
-        get_text = request('text.get_text'),
-        indent_chunk = '  ',
-        next_line_indent = 0,
-        inc_indent = request('inc_indent'),
-        dec_indent = request('dec_indent'),
-        max_text_width = 0,
-        max_block_width = 0,
-        get_text_width = request('text.get_text_width'),
-        get_block_width = request('text.get_block_width'),
-        init = request('init'),
-      }
-  end
-_G.package.preload['workshop.mechs.text_block.init'] =
-  function(...)
-    return
-      function(self)
-        self.processed_text = {}
-        self.line_with_text.indents_obj.indent_chunk = self.indent_chunk
-        self.line_with_text:init()
-        self.line_with_text.indent = self.next_line_indent
-        self.num_line_feeds = 0
-      end
-  end
-_G.package.preload['workshop.mechs.text_block.text.request_clean_line'] =
-  function(...)
-    return
-      function(self)
-        if not self:on_clean_line() then
-          self:new_line()
-        end
-      end
-  end
-_G.package.preload['workshop.mechs.text_block.text.on_clean_line'] =
-  function(...)
-    return
-      function(self)
-        return
-          (self.num_line_feeds > 0) or
-          ((self.num_line_feeds == 0) and (self.line_with_text.text == ''))
-      end
-  end
-_G.package.preload['workshop.mechs.text_block.text.get_text_width'] =
-  function(...)
-    return
-      function(self)
-        return math.max(self.max_text_width, self.line_with_text:get_text_length())
-      end
-  end
-_G.package.preload['workshop.mechs.text_block.text.get_text'] =
-  function(...)
-    return
-      function(self)
-        self:store_textline()
-        local result = table.concat(self.processed_text)
-        return result
-      end
-  end
-_G.package.preload['workshop.mechs.text_block.text.get_block_width'] =
-  function(...)
-    return
-      function(self)
-        return math.max(self.max_block_width, self.line_with_text:get_line_length())
-      end
-  end
-_G.package.preload['workshop.mechs.text_block.text.new_line'] =
-  function(...)
-    return
-      function(self)
-        self.num_line_feeds = self.num_line_feeds + 1
-      end
-  end
-_G.package.preload['workshop.mechs.text_block.text.add_textline'] =
-  function(...)
-    return
-      function(self, s)
-        self.line_with_text:add(s)
-      end
-  end
-_G.package.preload['workshop.mechs.text_block.text.add_curline'] =
-  function(...)
-    return
-      function(self, s)
-        if (self.num_line_feeds > 0) and (s ~= '') then
-          self:store_textline()
-        end
-        if (self.line_with_text.text == '') then
-          self.line_with_text.indent = self.next_line_indent
-        end
-        self.line_with_text:add(s)
-      end
-  end
-_G.package.preload['workshop.mechs.text_block.text.request_empty_line'] =
-  function(...)
-    return
-      function(self)
-        if not self:on_clean_line() then
-          self:new_line()
-        end
-        if (self.num_line_feeds == 1) then
-          self:new_line()
-        end
-      end
-  end
-_G.package.preload['workshop.mechs.text_block.text.include'] =
-  function(...)
-    return
-      function(self, block, do_glue_border_lines)
-        if not do_glue_border_lines then
-          self:new_line()
-        end
-        self:store_textline()
-        table.move(
-          block.processed_text,
-          1,
-          #block.processed_text,
-          #self.processed_text + 1,
-          self.processed_text
-        )
-        self.line_with_text = block.line_with_text
-      end
-  end
-_G.package.preload['workshop.mechs.text_block.text.store_textline'] =
-  function(...)
-    local trim_head_spaces = request('^.^.^.string.trim_head_spaces')
-    local trim_tail_spaces = request('^.^.^.string.trim_tail_spaces')
-    return
-      function(self)
-        local line_with_text = self.line_with_text
-        line_with_text.text = trim_head_spaces(line_with_text.text)
-        line_with_text.text = trim_tail_spaces(line_with_text.text)
-        self.max_block_width = self:get_block_width()
-        self.max_text_width = self:get_text_width()
-        self.processed_text[#self.processed_text + 1] = line_with_text:get_line()
-        for i = 1, self.num_line_feeds do
-          self.processed_text[#self.processed_text + 1] = '\n'
-        end
-        self.num_line_feeds = 0
-        line_with_text.text = ''
-        line_with_text.indent = self.next_line_indent
-      end
-  end
-_G.package.preload['workshop.mechs.text_block.line.get_text_length'] =
-  function(...)
-    return
-      function(self)
-        return utf8.len(self.text) or #self.text
-      end
-  end
-_G.package.preload['workshop.mechs.text_block.line.add'] =
-  function(...)
-    return
-      function(self, s)
-        self.text = self.text .. s
-      end
-  end
-_G.package.preload['workshop.mechs.text_block.line.get_line'] =
-  function(...)
-    return
-      function(self)
-        if (self.text == '') then
-          return ''
-        else
-          return self.indents_obj.indents[self.indent] .. self.text
-        end
-      end
-  end
-_G.package.preload['workshop.mechs.text_block.line.interface'] =
-  function(...)
-    return
-      {
-        text = '',
-        indent = 0,
-        indents_obj = request('^.^.indents_table'),
-        chunk_length = 0,
-        init = request('init'),
-        get_line_length = request('get_line_length'),
-        get_text_length = request('get_text_length'),
-        get_line = request('get_line'),
-        add = request('add'),
-      }
-  end
-_G.package.preload['workshop.mechs.text_block.line.get_line_length'] =
-  function(...)
-    return
-      function(self)
-        return self.indent * self.chunk_length + self:get_text_length()
-      end
-  end
-_G.package.preload['workshop.mechs.text_block.line.init'] =
-  function(...)
-    return
-      function(self)
-        self.indents_obj:init()
-        self.chunk_length = utf8.len(self.indents_obj.indent_chunk)
-      end
+    return Interface
   end
 _G.package.preload['workshop.mechs.graph.dfs'] =
   function(...)
@@ -513,17 +221,37 @@ _G.package.preload['workshop.mechs.graph.assembly_order'] =
         return node_recs, assembly_order_seq
       end
   end
+_G.package.preload['workshop.mechs.graph.dfs.get_children'] =
+  function(...)
+    local get_key_vals = request('!.table.get_key_vals')
+    local compare_keys = request('!.table.ordered_pass.compare_keys')
+    local get_children =
+      function(self, node)
+        local result = {}
+        local key_vals = get_key_vals(node)
+        local also_visit_keys = self.also_visit_keys
+        for _, rec in ipairs(key_vals) do
+          if is_table(rec.value) then
+            result[#result + 1] = rec
+          end
+          if also_visit_keys and is_table(rec.key) then
+            result[#result + 1] = {key = rec.key, value = rec.key}
+          end
+        end
+        table.sort(result, compare_keys)
+        return result
+      end
+    return get_children
+  end
 _G.package.preload['workshop.mechs.graph.dfs.dfs'] =
   function(...)
     return
       function(self, graph)
-        assert_table(graph)
         self.nodes_status = {}
         local handle_discovery = self.handle_discovery
         local handle_leave = self.handle_leave
-        local table_iterator = self.table_iterator
-        local iterate_table_keys = self.also_visit_keys
         local nodes_status = self.nodes_status
+        local get_children = self.get_children
         local init_node_rec =
           function(node)
             nodes_status[node] = nodes_status[node] or {node = node}
@@ -531,7 +259,7 @@ _G.package.preload['workshop.mechs.graph.dfs.dfs'] =
         local time = 0
         local dfs_visit
         local process =
-          function(parent, parent_key, node, deep)
+          function(parent, parent_key, node, depth)
             init_node_rec(node)
             local node_rec = nodes_status[node]
             node_rec.refs = node_rec.refs or {}
@@ -540,31 +268,26 @@ _G.package.preload['workshop.mechs.graph.dfs.dfs'] =
             if not node_rec.color then
               node_rec.parent = parent
               node_rec.parent_key = parent_key
-              dfs_visit(node, deep + 1)
+              dfs_visit(node, depth + 1)
             elseif (node_rec.color == 'gray') then
               node_rec.part_of_cycle = true
               nodes_status[parent].part_of_cycle = true
             end
           end
         dfs_visit =
-          function(node, deep)
+          function(node, depth)
             time = time + 1
             local node_rec = nodes_status[node]
             node_rec.discovery_time = time
             node_rec.color = 'gray'
-            handle_discovery(node, node_rec, deep)
-            for k, v in table_iterator(node) do
-              if is_table(v) then
-                process(node, k, v, deep)
-              end
-              if is_table(k) and iterate_table_keys then
-                process(node, k, k, deep)
-              end
+            handle_discovery(node, node_rec, depth)
+            for _, child in ipairs(self:get_children(node)) do
+              process(node, child.key, child.value, depth)
             end
             time = time + 1
             node_rec.color = 'black'
             node_rec.finish_time = time
-            handle_leave(node, node_rec, deep)
+            handle_leave(node, node_rec, depth)
           end
         init_node_rec(graph)
         dfs_visit(graph, 0)
@@ -577,563 +300,38 @@ _G.package.preload['workshop.mechs.graph.dfs.interface'] =
       end
     return
       {
-        also_visit_keys = false,
-        nodes_status = {},
-        table_iterator = request('^.^.^.table.ordered_pass'),
+        get_children = request('get_children'),
         handle_discovery = empty_func,
         handle_leave = empty_func,
-        run = request('dfs'),
-      }
-  end
-_G.package.preload['workshop.formats.lua.load.keywords'] =
-  function(...)
-    local map_values = request('!.table.map_values')
-    return
-      map_values(
-        {
-          'nil',
-          'true',
-          'false',
-          'not',
-          'and',
-          'or',
-          'do',
-          'end',
-          'local',
-          'function',
-          'goto',
-          'if',
-          'then',
-          'elseif',
-          'else',
-          'while',
-          'repeat',
-          'until',
-          'for',
-          'in',
-          'break',
-          'return',
-        }
-      )
-  end
-_G.package.preload['workshop.formats.lua.load.is_identifier'] =
-  function(...)
-    local keywords = request('keywords')
-    return
-      function(s)
-        return is_string(s) and s:match('^[%a_][%w_]*$') and not keywords[s]
-      end
-  end
-_G.package.preload['workshop.formats.lua.save.quote_string'] =
-  function(...)
-    local quote_linear = request('quote_string.linear')
-    local quote_intact = request('quote_string.intact')
-    local content_funcs = request('^.^.^.string.content_attributes')
-    local has_control_chars = content_funcs.has_control_chars
-    local has_backslashes = content_funcs.has_backslashes
-    local has_single_quotes = content_funcs.has_single_quotes
-    local has_double_quotes = content_funcs.has_double_quotes
-    return
-      function(s)
-        assert_string(s)
-        local quote_func
-        if has_control_chars(s) then
-          quote_func = quote_linear
-        elseif has_backslashes(s) or (has_single_quotes(s) and has_double_quotes(s)) then
-          quote_func = quote_intact
-        else
-          quote_func = quote_linear
-        end
-        local result = quote_func(s)
-        return result
-      end
-  end
-_G.package.preload['workshop.formats.lua.save.quote_string.intact'] =
-  function(...)
-    return
-      function(s)
-        assert_string(s)
-        local min_needed_quotes = 0
-        if (s:sub(-1) == ']') then
-          min_needed_quotes = 1
-        end
-        local postfix, eq_chunk
-        while true do
-          eq_chunk = ('='):rep(min_needed_quotes)
-          postfix = ']' .. eq_chunk .. ']'
-          if not s:find(postfix, 1, true) then
-            break
-          end
-          min_needed_quotes = min_needed_quotes + 1
-        end
-        local prefix = '[' .. eq_chunk .. '['
-        if (s:sub(1, 2) == '\x0d\x0a') or (s:sub(1, 1) == '\x0a') then
-          prefix = prefix .. '\n'
-        end
-        return prefix .. s .. postfix
-      end
-  end
-_G.package.preload['workshop.formats.lua.save.quote_string.linear'] =
-  function(...)
-    local quote_char = request('quote_char')
-    local custom_quotes = request('custom_quotes')
-    return
-      function(s)
-        local result = s
-        result = result:gsub([[\]], quote_char)
-        result = result:gsub('[%c]', quote_char)
-        local cnt_q1 = 0
-        for i in result:gmatch("'") do
-          cnt_q1 = cnt_q1 + 1
-        end
-        local cnt_q2 = 0
-        for i in result:gmatch('"') do
-          cnt_q2 = cnt_q2 + 1
-        end
-        if (cnt_q1 <= cnt_q2) then
-          result = "'" .. result:gsub("'", custom_quotes["'"]) .. "'"
-        else
-          result = '"' .. result:gsub('"', custom_quotes['"']) .. '"'
-        end
-        return result
-      end
-  end
-_G.package.preload['workshop.formats.lua.save.quote_string.quote_char'] =
-  function(...)
-    return
-      function(c)
-        return ([[\x%02x]]):format(c:byte(1, 1))
-      end
-  end
-_G.package.preload['workshop.formats.lua.save.quote_string.custom_quotes'] =
-  function(...)
-    return
-      {
-        ['\x07'] = [[\a]],
-        ['\x08'] = [[\b]],
-        ['\x09'] = [[\t]],
-        ['\x0a'] = [[\n]],
-        ['\x0b'] = [[\v]],
-        ['\x0c'] = [[\f]],
-        ['\x0d'] = [[\r]],
-        ['"'] = [[\"]],
-        ["'"] = [[\']],
-        ['\\'] = [[\\]],
-      }
-  end
-_G.package.preload['workshop.formats.lua_table.save.get_ast'] =
-  function(...)
-    return
-      function(self, data)
-        local result
-        local data_type = type(data)
-        if (data_type == 'table') then
-          if self.value_names[data] then
-            result = {type = 'name', value = self.value_names[data]}
-          else
-            result = {}
-            result.type = 'table'
-            for key, value in self.table_iterator(data) do
-              local key_slot = self:get_ast(key)
-              local value_slot = self:get_ast(value)
-              result[#result + 1] = {key = key_slot, value = value_slot}
-            end
-          end
-        else
-          result = {type = data_type, value = data}
-        end
-        return result
-      end
-  end
-_G.package.preload['workshop.formats.lua_table.save.interface'] =
-  function(...)
-    return
-      {
-        init = request('init'),
-        get_ast = request('get_ast'),
-        serialize_ast = request('serialize_ast'),
-        node_handlers = {},
-        c_text_block = request('!.mechs.text_block.interface'),
-        text_block = nil,
-        value_names = {},
+        also_visit_keys = false,
         table_iterator = request('!.table.ordered_pass'),
-        install_node_handlers = request('install_node_handlers.readable'),
+        run = request('dfs'),
+        nodes_status = {},
       }
   end
-_G.package.preload['workshop.formats.lua_table.save.serialize_ast'] =
+_G.package.preload['workshop.number.is_neg_inf'] =
   function(...)
-    local compile = request('!.mechs.compile')
-    return
-      function(self, ast)
-        compile(ast, self.node_handlers)
-        return self.text_block:get_text()
+    local is_neg_inf =
+      function(n)
+        return (n == -1 / 0)
       end
+    return is_neg_inf
   end
-_G.package.preload['workshop.formats.lua_table.save.init'] =
+_G.package.preload['workshop.number.is_pos_inf'] =
   function(...)
-    return
-      function(self)
-        self.text_block = new(self.c_text_block)
-        self.text_block:init()
-        self.install_node_handlers(self.node_handlers, self.text_block)
+    local is_pos_inf =
+      function(n)
+        return (n == 1 / 0)
       end
+    return is_pos_inf
   end
-_G.package.preload['workshop.formats.lua_table.save.install_node_handlers.readable'] =
+_G.package.preload['workshop.number.is_nan'] =
   function(...)
-    local text_block
-    local add =
-      function(s)
-        text_block:add_curline(s)
+    local is_nan =
+      function(n)
+        return (n ~= n)
       end
-    local request_clean_line =
-      function()
-        text_block:request_clean_line()
-      end
-    local inc_indent =
-      function()
-        text_block:inc_indent()
-      end
-    local dec_indent =
-      function()
-        text_block:dec_indent()
-      end
-    local node_handlers = {}
-    local raw_compile = request('!.mechs.compile')
-    local compile =
-      function(t)
-        add(raw_compile(t, node_handlers))
-      end
-    local is_identifier = request('!.formats.lua.load.is_identifier')
-    local compact_sequences = true
-    node_handlers.table =
-      function(node)
-        if (#node == 0) then
-          add('{}')
-          return
-        end
-        local last_integer_key = 0
-        add('{')
-        inc_indent()
-        for i = 1, #node do
-          local key, value = node[i].key, node[i].value
-          request_clean_line()
-          if
-            compact_sequences and
-            (key.type == 'number') and
-            is_integer(key.value) and
-            (key.value == last_integer_key + 1)
-          then
-            last_integer_key = key.value
-          else
-            if (key.type == 'string') and is_identifier(key.value) then
-              add(key.value)
-            else
-              add('[')
-              compile(key)
-              add(']')
-            end
-            add(' = ')
-          end
-          compile(value)
-          add(',')
-        end
-        dec_indent()
-        request_clean_line()
-        add('}')
-      end
-    local merge = request('!.table.merge')
-    local install_minimal_handlers = request('minimal')
-    return
-      function(a_node_handlers, a_text_block, options)
-        install_minimal_handlers(a_node_handlers, a_text_block, options)
-        node_handlers = merge(a_node_handlers, node_handlers)
-        text_block = a_text_block
-        if options and is_boolean(options.compact_sequences) then
-          compact_sequences = options.compact_sequences
-        end
-      end
-  end
-_G.package.preload['workshop.formats.lua_table.save.install_node_handlers.minimal'] =
-  function(...)
-    local text_block
-    local add =
-      function(s)
-        text_block:add_curline(s)
-      end
-    local node_handlers = {}
-    local raw_compile = request('!.mechs.compile')
-    local compile =
-      function(t)
-        add(raw_compile(t, node_handlers))
-      end
-    local is_identifier = request('!.formats.lua.load.is_identifier')
-    local compact_sequences = true
-    node_handlers.table =
-      function(node)
-        if (#node == 0) then
-          add('{}')
-          return
-        end
-        local last_integer_key = 0
-        add('{')
-        for i = 1, #node do
-          if (i > 1) then
-            add(',')
-          end
-          local key, value = node[i].key, node[i].value
-          if
-            compact_sequences and
-            (key.type == 'number') and
-            is_integer(key.value) and
-            (key.value == last_integer_key + 1)
-          then
-            last_integer_key = key.value
-          else
-            if (key.type == 'string') and is_identifier(key.value) then
-              add(key.value)
-            else
-              add('[')
-              compile(key)
-              add(']')
-            end
-            add('=')
-          end
-          compile(value)
-        end
-        add('}')
-      end
-    do
-      local serialize_tostring =
-        function(node)
-          add(tostring(node.value))
-        end
-      local tostring_datatypes = {'number', 'boolean', 'nil'}
-      for i = 1, #tostring_datatypes do
-        node_handlers[tostring_datatypes[i]] = serialize_tostring
-      end
-    end
-    do
-      local quote_string = request('!.formats.lua.save.quote_string')
-      local serialize_quoted =
-        function(node)
-          local quoted_string = quote_string(tostring(node.value))
-          if not text_block:on_clean_line() then
-            local text_line = text_block.line_with_text:get_line()
-            if (text_line:sub(-1) == '[') and (quoted_string:sub(1, 1) == '[') then
-              add(' ')
-            end
-          end
-          add(quoted_string)
-        end
-      local quoted_datatypes = {'string', 'function', 'thread', 'userdata'}
-      for i = 1, #quoted_datatypes do
-        node_handlers[quoted_datatypes[i]] = serialize_quoted
-      end
-    end
-    node_handlers.name =
-      function(node)
-        compile(node.value)
-      end
-    local merge = request('!.table.merge')
-    return
-      function(a_node_handlers, a_text_block, options)
-        node_handlers = merge(a_node_handlers, node_handlers)
-        text_block = a_text_block
-        if options and is_boolean(options.compact_sequences) then
-          compact_sequences = options.compact_sequences
-        end
-      end
-  end
-_G.package.preload['workshop.formats.lua_table_code.save'] =
-  function(...)
-    local c_table_serializer = request('save.interface')
-    return
-      function(t, options)
-        assert_table(t)
-        local table_serializer = new(c_table_serializer, options)
-        table_serializer:init()
-        local ast = table_serializer:get_ast(t)
-        local result = table_serializer:serialize_ast(ast)
-        return result
-      end
-  end
-_G.package.preload['workshop.formats.lua_table_code.save.get_ast'] =
-  function(...)
-    local get_num_refs =
-      function(node_rec)
-        local result = 0
-        if node_rec.refs then
-          local node = node_rec.node
-          for parent, parent_keys in pairs(node_rec.refs) do
-            if (parent == node) then
-              result = result + 1
-            end
-            for key in pairs(parent_keys) do
-              if (parent[key] == node) then
-                result = result + 1
-              end
-              if (key == node) then
-                result = result + 1
-              end
-            end
-          end
-        end
-        return result
-      end
-    local may_print_inline =
-      function(node_rec)
-        return not node_rec or ((get_num_refs(node_rec) <= 1) and not node_rec.part_of_cycle)
-      end
-    local get_assembly_order = request('!.mechs.graph.assembly_order')
-    local name_giver = request('!.mechs.name_giver')
-    return
-      function(self, data)
-        local table_serializer = self.table_serializer
-        local table_iterator = table_serializer.table_iterator
-        local node_recs, nodes_ordered =
-          get_assembly_order(data, {also_visit_keys = true, table_iterator = table_iterator})
-        local result = {}
-        local processed_tables = {}
-        for i = 1, #nodes_ordered do
-          local node = nodes_ordered[i]
-          local node_rec = node_recs[node]
-          if not may_print_inline(node_rec) or (node == data) then
-            local table_rec
-            if node_rec.part_of_cycle then
-              table_rec = {type = 'table'}
-              for k, v in table_serializer.table_iterator(node) do
-                local key_is_ok = not is_table(k) or processed_tables[k]
-                local value_is_ok = not is_table(v) or processed_tables[v]
-                if key_is_ok and value_is_ok then
-                  table_rec[#table_rec + 1] =
-                    {key = table_serializer:get_ast(k), value = table_serializer:get_ast(v)}
-                end
-              end
-            else
-              table_rec = table_serializer:get_ast(node)
-            end
-            local node_name = name_giver:give_name(node)
-            result[#result + 1] =
-              {type = 'local_definition', name = node_name, value = table_rec}
-            table_serializer.value_names[node] = node_name
-          end
-          processed_tables[node] = true
-          if node_rec.part_of_cycle then
-            for parent, parent_keys in pairs(node_rec.refs) do
-              if processed_tables[parent] then
-                for parent_key in pairs(parent_keys) do
-                  local key_slot
-                  local key_name = table_serializer.value_names[parent_key]
-                  if key_name then
-                    key_slot = {type = 'name', value = key_name}
-                  else
-                    key_slot = {type = type(parent_key), value = parent_key}
-                  end
-                  result[#result + 1] =
-                    {
-                      type = 'assignment',
-                      name = table_serializer.value_names[parent],
-                      index = {type = 'index', value = key_slot},
-                      value = table_serializer.value_names[node],
-                    }
-                end
-              end
-            end
-          end
-        end
-        result[#result + 1] =
-          {type = 'return_statement', value = table_serializer.value_names[data]}
-        return result
-      end
-  end
-_G.package.preload['workshop.formats.lua_table_code.save.interface'] =
-  function(...)
-    return
-      {
-        init = request('init'),
-        get_ast = request('get_ast'),
-        serialize_ast = request('serialize_ast'),
-        c_table_serializer = request('!.formats.lua_table.save.interface'),
-        table_serializer = nil,
-        install_node_handlers = request('install_node_handlers'),
-      }
-  end
-_G.package.preload['workshop.formats.lua_table_code.save.serialize_ast'] =
-  function(...)
-    return
-      function(self, ast)
-        return self.table_serializer:serialize_ast(ast)
-      end
-  end
-_G.package.preload['workshop.formats.lua_table_code.save.install_node_handlers'] =
-  function(...)
-    local text_block
-    local node_handlers = {}
-    local add =
-      function(s)
-        text_block:add_curline(s)
-      end
-    local request_clean_line =
-      function()
-        text_block:request_clean_line()
-      end
-    local raw_compile = request('!.mechs.compile')
-    local compile =
-      function(t)
-        add(raw_compile(t, node_handlers))
-      end
-    node_handlers.local_definition =
-      function(node)
-        request_clean_line()
-        add('local ')
-        compile(node.name)
-        add(' = ')
-        compile(node.value)
-      end
-    local quote_string = request('!.formats.lua.save.quote_string')
-    local is_identifier = request('!.formats.lua.load.is_identifier')
-    node_handlers.index =
-      function(node)
-        if (node.value.type == 'string') and is_identifier(node.value.value) then
-          add('.')
-          add(node.value.value)
-        else
-          add('[')
-          compile(node.value)
-          add(']')
-        end
-      end
-    node_handlers.assignment =
-      function(node)
-        request_clean_line()
-        add(node.name)
-        compile(node.index)
-        add(' = ')
-        compile(node.value)
-      end
-    node_handlers.return_statement =
-      function(node)
-        request_clean_line()
-        add('return ')
-        compile(node.value)
-      end
-    local merge = request('!.table.merge')
-    return
-      function(a_node_handlers, a_text_block)
-        node_handlers = merge(a_node_handlers, node_handlers)
-        text_block = a_text_block
-      end
-  end
-_G.package.preload['workshop.formats.lua_table_code.save.init'] =
-  function(...)
-    return
-      function(self)
-        self.table_serializer = new(self.c_table_serializer)
-        self.table_serializer:init()
-        self.install_node_handlers(
-          self.table_serializer.node_handlers, self.table_serializer.text_block
-        )
-      end
+    return is_nan
   end
 _G.package.preload['workshop.table.clone'] =
   function(...)
@@ -1165,50 +363,66 @@ _G.package.preload['workshop.table.clone'] =
   end
 _G.package.preload['workshop.table.new'] =
   function(...)
-    local clone = request('^.table.clone')
-    local patch = request('^.table.patch')
+    local clone = request('clone')
+    local patch = request('patch')
     return
-      function(default_params, a_params)
-        assert_table(default_params)
-        local result = clone(default_params)
-        if is_table(a_params) then
-          patch(result, a_params)
+      function(base_obj, overriden_params)
+        assert_table(base_obj)
+        local result = clone(base_obj)
+        if is_table(overriden_params) then
+          patch(result, overriden_params)
         end
         return result
       end
   end
 _G.package.preload['workshop.table.patch'] =
   function(...)
-    local patch
-    patch =
-      function(t_src, t_patch)
-        for k, v in pairs(t_patch) do
-          if (t_src[k] == nil) then
-            local err_msg = ('Destination table dont have key "%s".'):format(tostring(k))
-            error(err_msg, 2)
-          end
-          if is_table(t_src[k]) and is_table(v) then
-            patch(t_src[k], v)
-          else
-            t_src[k] = v
-          end
+    local apply_table = request('apply_table')
+    local patch =
+      function(Result, Additions)
+        assert_table(Result)
+        if is_nil(Additions) then
+          return
         end
+        assert_table(Additions)
+        local Rules =
+          {
+            {HasA = true, HasB = true, Action = 'use_b'},
+            {HasA = false, HasB = true, Action = 'use_a'},
+          }
+        apply_table(Result, Additions, Rules)
       end
     return patch
   end
 _G.package.preload['workshop.table.map_values'] =
   function(...)
-    return
-      function(t)
-        assert_table(t)
-        local result = {}
-        for k, v in pairs(t) do
-          result[v] = true
+    local map_values =
+      function(List)
+        assert_table(List)
+        local Result = {}
+        for _, value in pairs(List) do
+          Result[value] = true
         end
-        return result
+        return Result
       end
+    return map_values
   end
-_G.package.preload['workshop.table.to_key_val'] =
+_G.package.preload['workshop.table.create_instance'] =
+  function(...)
+    local clone = request('clone')
+    local attach_methods = request('attach_methods')
+    local create_instance =
+      function(Data, Methods)
+        assert_table(Data)
+        assert_table(Methods)
+        local Result
+        Result = clone(Data)
+        attach_methods(Result, Methods)
+        return Result
+      end
+    return create_instance
+  end
+_G.package.preload['workshop.table.get_key_vals'] =
   function(...)
     return
       function(t)
@@ -1220,50 +434,84 @@ _G.package.preload['workshop.table.to_key_val'] =
         return result
       end
   end
-_G.package.preload['workshop.table.merge'] =
+_G.package.preload['workshop.table.apply_table'] =
   function(...)
-    return
-      function(t_dest, t_src)
-        assert_table(t_src)
-        assert_table(t_dest)
-        for k, v in pairs(t_src) do
-          t_dest[k] = v
+    local use_a_str = 'use_a'
+    local use_b_str = 'use_b'
+    local get_action =
+      function(has_a, has_b, Rules)
+        for _, Rule in ipairs(Rules) do
+          local is_same_signature = (Rule.HasA == has_a) and (Rule.HasB == has_b)
+          if is_same_signature then
+            return Rule.Action
+          end
         end
-        return t_dest
+        return use_a_str
       end
-  end
-_G.package.preload['workshop.table.unfold'] =
-  function(...)
-    return
-      function(t)
-        assert_table(t)
-        local result = {}
-        local unfold
-        unfold =
-          function(node)
-            for i = 1, #node do
-              if is_table(node[i]) then
-                unfold(node[i])
-              else
-                result[#result + 1] = node[i]
-              end
+    local apply_table
+    apply_table =
+      function(A, B, Rules)
+        local a_type = type(A)
+        local b_type = type(B)
+        local Keys = {}
+        do
+          for a_key in pairs(A) do
+            Keys[a_key] = true
+          end
+          for b_key in pairs(B) do
+            Keys[b_key] = true
+          end
+        end
+        for key in pairs(Keys) do
+          local has_a = not is_nil(A[key])
+          local has_b = not is_nil(B[key])
+          local a_is_table = has_a and is_table(A[key])
+          local b_is_table = has_b and is_table(B[key])
+          if a_is_table and b_is_table then
+            apply_table(A[key], B[key], Rules)
+          else
+            local action = get_action(has_a, has_b, Rules)
+            if (action == use_a_str) then
+            elseif (action == use_b_str) then
+              A[key] = B[key]
             end
           end
-        unfold(t)
-        return result
+        end
       end
+    local check_rule =
+      function(Rule)
+        local has_a = is_boolean(Rule.HasA)
+        local has_b = is_boolean(Rule.HasB)
+        local action = Rule.Action
+        local is_known_action = (action == use_a_str) or (action == use_b_str)
+        return has_a, has_b, is_known_action
+      end
+    local apply_table_root =
+      function(A, B, Rules)
+        assert_table(A)
+        assert_table(B)
+        assert_table(Rules)
+        for index, Rule in ipairs(Rules) do
+          local has_a, has_b, is_known_action = check_rule(Rule)
+          if not (has_a and has_b and is_known_action) then
+            local err_msg = 'Unsupported rule at index ' .. tostring(index)
+            error(err_msg, 2)
+          end
+        end
+        apply_table(A, B, Rules)
+      end
+    return apply_table_root
   end
 _G.package.preload['workshop.table.ordered_pass'] =
   function(...)
-    local default_comparator = request('ordered_pass.default_comparator')
-    local extract_keys = request('extract_keys')
-    local to_key_val = request('to_key_val')
-    return
+    local get_key_vals = request('get_key_vals')
+    local compare_keys = request('ordered_pass.compare_keys')
+    local ordered_pass =
       function(t, comparator)
         assert_table(t)
-        comparator = comparator or default_comparator
+        comparator = comparator or compare_keys
         assert_function(comparator)
-        local key_vals = to_key_val(t)
+        local key_vals = get_key_vals(t)
         table.sort(key_vals, comparator)
         local i = 0
         local sorted_next =
@@ -1275,42 +523,46 @@ _G.package.preload['workshop.table.ordered_pass'] =
           end
         return sorted_next, t
       end
+    return ordered_pass
   end
-_G.package.preload['workshop.table.extract_keys'] =
+_G.package.preload['workshop.table.attach_methods'] =
   function(...)
-    return
-      function(t)
-        assert_table(t)
-        local result = {}
-        for k, v in pairs(t) do
-          result[#result + 1] = k
-        end
-        return result
+    local attach_methods =
+      function(Object, Methods)
+        assert_table(Object)
+        assert_table(Methods)
+        setmetatable(Object, {__index = Methods})
       end
+    return attach_methods
   end
-_G.package.preload['workshop.table.ordered_pass.default_comparator'] =
+_G.package.preload['workshop.table.ordered_pass.compare_values'] =
   function(...)
-    local val_rank = {string = 1, number = 2, other = 3}
-    local comparable_types = {number = true, string = true}
-    return
+    local TypeRank_Map = {['number'] = 1, ['string'] = 2, other = 3}
+    local ComparableTypes_Map = {['number'] = true, ['string'] = true}
+    local compare_values =
       function(a, b)
-        local result
-        local a_key = a.key
-        local a_key_type = type(a_key)
-        local rank_a = val_rank[a_key_type] or val_rank.other
-        local b_key = b.key
-        local b_key_type = type(b_key)
-        local rank_b = val_rank[b_key_type] or val_rank.other
+        local type_a = type(a)
+        local rank_a = TypeRank_Map[type_a] or TypeRank_Map.other
+        local type_b = type(b)
+        local rank_b = TypeRank_Map[type_b] or TypeRank_Map.other
         if (rank_a ~= rank_b) then
           return (rank_a < rank_b)
-        else
-          if comparable_types[a_key_type] and comparable_types[b_key_type] then
-            return (a_key < b_key)
-          else
-            return (tostring(a_key) < tostring(b_key))
-          end
         end
+        if ComparableTypes_Map[type_a] and ComparableTypes_Map[type_b] then
+          return (a < b)
+        end
+        return (tostring(a) < tostring(b))
       end
+    return compare_values
+  end
+_G.package.preload['workshop.table.ordered_pass.compare_keys'] =
+  function(...)
+    local compare_values = request('compare_values')
+    local compare_keys =
+      function(a, b)
+        return compare_values(a.key, b.key)
+      end
+    return compare_keys
   end
 _G.package.preload['workshop.string.content_attributes'] =
   function(...)
@@ -1330,62 +582,790 @@ _G.package.preload['workshop.string.content_attributes'] =
       function(s)
         return s:find([[%"]]) and true
       end
+    local is_nonascii =
+      function(s)
+        return s:find('[^%w%s_%p]')
+      end
+    local has_newlines =
+      function(s)
+        return s:find('[\n\r]')
+      end
     return
       {
         has_control_chars = has_control_chars,
         has_backslashes = has_backslashes,
         has_single_quotes = has_single_quotes,
         has_double_quotes = has_double_quotes,
+        is_nonascii = is_nonascii,
+        has_newlines = has_newlines,
       }
   end
-_G.package.preload['workshop.string.split'] =
+_G.package.preload['workshop.convert.table_to_str'] =
   function(...)
+    local StringOutputStream = request('!.concepts.StreamIo.Output.String')
+    local graph_to_str = request('!.concepts.codec_lua_graph.compile')
+    local table_to_str =
+      function(Graph, Options)
+        local StringStream = new(StringOutputStream)
+        graph_to_str(Graph, StringStream, Options)
+        return StringStream:GetString()
+      end
+    return table_to_str
+  end
+_G.package.preload['workshop.concepts.Indent'] =
+  function(...)
+    local create_instance = request('!.table.create_instance')
+    local RangePointClass = request('!.concepts.RangePoint')
+    local Core
+    local RangePoint = RangePointClass.create()
+    RangePoint.min_value = 0
+    RangePoint.max_value = 60
+    RangePoint.value = 0
+    Core = {indent_chunk = '  ', RangePoint = RangePoint}
+    local Interface
+    Interface =
+      {
+        ToString =
+          function(Me)
+            return string.rep(Me.indent_chunk, Me:GetRangePoint():GetValue())
+          end,
+        Inc =
+          function(Me)
+            Me:GetRangePoint():Inc()
+          end,
+        Dec =
+          function(Me)
+            Me:GetRangePoint():Dec()
+          end,
+        create =
+          function(OptCore)
+            return create_instance(OptCore or Core, Interface)
+          end,
+        GetRangePoint =
+          function(Me)
+            return Me.RangePoint
+          end,
+      }
+    return Interface
+  end
+_G.package.preload['workshop.concepts.RangePoint'] =
+  function(...)
+    local create_instance = request('!.table.create_instance')
+    local Core
+    Core = {value = 0, min_value = 0, max_value = 5}
+    local Interface
+    Interface =
+      {
+        IncBy =
+          function(Me, value)
+            Me:SetValue(Me:GetValue() + value)
+          end,
+        DecBy =
+          function(Me, value)
+            Me:SetValue(Me:GetValue() - value)
+          end,
+        create =
+          function(OptCore)
+            return create_instance(OptCore or Core, Interface)
+          end,
+        Inc =
+          function(Me)
+            Me:IncBy(1)
+          end,
+        Dec =
+          function(Me)
+            Me:DecBy(1)
+          end,
+        GetValue =
+          function(Me)
+            return math.max(math.min(Me.value, Me.max_value), Me.min_value)
+          end,
+        SetValue =
+          function(Me, value)
+            Me.value = math.max(math.min(value, Me.max_value), Me.min_value)
+          end,
+      }
+    return Interface
+  end
+_G.package.preload['workshop.concepts.lua.NumberTypeNames'] =
+  function(...)
+    local NumberTypeNames = {'integer', 'float'}
+    return NumberTypeNames
+  end
+_G.package.preload['workshop.concepts.lua.TypeNames'] =
+  function(...)
+    local TypeNames =
+      {'nil', 'boolean', 'number', 'string', 'function', 'thread', 'userdata', 'table'}
+    return TypeNames
+  end
+_G.package.preload['workshop.concepts.lua.Keywords'] =
+  function(...)
+    local Keywords =
+      {
+        'nil',
+        'true',
+        'false',
+        'not',
+        'and',
+        'or',
+        'local',
+        'do',
+        'end',
+        'goto',
+        'if',
+        'then',
+        'elseif',
+        'else',
+        'while',
+        'repeat',
+        'until',
+        'for',
+        'in',
+        'break',
+        'function',
+        'return',
+      }
+    return Keywords
+  end
+_G.package.preload['workshop.concepts.lua.is_identifier'] =
+  function(...)
+    local Keywords_Map
+    do
+      local Keywords = request('Keywords')
+      local map_values = request('!.table.map_values')
+      Keywords_Map = map_values(Keywords)
+    end
+    local is_identifier =
+      function(str)
+        return is_string(str) and string.match(str, '^[%a_][%w_]*$') and not Keywords_Map[str]
+      end
+    return is_identifier
+  end
+_G.package.preload['workshop.concepts.lua.serialize_terminal_value'] =
+  function(...)
+    local is_nan = request('!.number.is_nan')
+    local is_pos_inf = request('!.number.is_pos_inf')
+    local is_neg_inf = request('!.number.is_neg_inf')
+    local lua_quote_str = request('!.concepts.lua.quote_string')
+    local encode_bool =
+      function(val)
+        if (val == false) then
+          return 'false'
+        end
+        if (val == true) then
+          return 'true'
+        end
+      end
+    local encode_number =
+      function(val)
+        if is_nan(val) then
+          return '0/0'
+        end
+        if is_pos_inf(val) then
+          return '1/0'
+        end
+        if is_neg_inf(val) then
+          return '-1/0'
+        end
+        return _G.tostring(val)
+      end
+    local encode_string =
+      function(val)
+        return lua_quote_str(val)
+      end
+    local serialize_terminal_value =
+      function(val)
+        if is_nil(val) then
+          return 'nil'
+        elseif is_boolean(val) then
+          return encode_bool(val)
+        elseif is_number(val) then
+          return encode_number(val)
+        elseif is_string(val) then
+          return encode_string(val)
+        end
+      end
+    return serialize_terminal_value
+  end
+_G.package.preload['workshop.concepts.lua.quote_string'] =
+  function(...)
+    local quote_escaped = request('quote_string.linear')
+    local quote_intact = request('quote_string.intact')
+    local quote_aggressive = request('quote_string.dump')
+    local content_funcs = request('!.string.content_attributes')
+    local has_control_chars = content_funcs.has_control_chars
+    local has_backslashes = content_funcs.has_backslashes
+    local has_single_quotes = content_funcs.has_single_quotes
+    local has_double_quotes = content_funcs.has_double_quotes
+    local has_newlines = content_funcs.has_newlines
+    local binary_entities_lengths =
+      {[1] = true, [2] = true, [4] = true, [8] = true, [16] = true}
     return
-      function(s, delim)
+      function(s)
         assert_string(s)
-        local delim = delim or '\n'
-        local result = {}
-        local last_pos = 1
-        for line, _last_pos in string.gmatch(s, '(.-)' .. delim .. '()') do
-          result[#result + 1] = line
-          last_pos = _last_pos
+        local quote_func = quote_escaped
+        if binary_entities_lengths[#s] and has_control_chars(s) then
+          quote_func = quote_aggressive
+        elseif
+          has_backslashes(s) or
+          has_newlines(s) or
+          (has_single_quotes(s) and has_double_quotes(s))
+        then
+          quote_func = quote_intact
         end
-        result[#result + 1] = s:sub(last_pos)
+        local result = quote_func(s)
         return result
       end
   end
-_G.package.preload['workshop.string.trim_tail_spaces'] =
+_G.package.preload['workshop.concepts.lua.quote_string.intact'] =
   function(...)
+    local has_newlines = request('!.string.content_attributes').has_newlines
     return
       function(s)
-        local result
-        if (s:sub(-1, -1) == ' ') then
-          local finish_pos = #s - 1
-          while (s:sub(finish_pos, finish_pos) == ' ') do
-            finish_pos = finish_pos - 1
+        assert_string(s)
+        s = s .. ']'
+        local eq_chunk = ''
+        local postfix
+        while true do
+          postfix = ']' .. eq_chunk .. ']'
+          if not s:find(postfix, 1, true) then
+            break
           end
-          result = s:sub(1, finish_pos)
-        else
-          result = s
+          eq_chunk = eq_chunk .. '='
         end
-        return result
+        local prefix = '[' .. eq_chunk .. '['
+        local first_char = s:sub(1, 1)
+        if (first_char == '\x0D') or (first_char == '\x0A') then
+          prefix = prefix .. first_char
+        end
+        if has_newlines(s) then
+          prefix = prefix .. '\x0A'
+        end
+        return prefix .. s .. eq_chunk .. ']'
       end
   end
-_G.package.preload['workshop.string.trim_head_spaces'] =
+_G.package.preload['workshop.concepts.lua.quote_string.linear'] =
   function(...)
+    local quote_char = request('quote_char')
+    local custom_quotes = request('custom_quotes')
     return
       function(s)
-        local result
-        if (s:sub(1, 1) == ' ') then
-          local start_pos = 2
-          while (s:sub(start_pos, start_pos) == ' ') do
-            start_pos = start_pos + 1
-          end
-          result = s:sub(start_pos)
+        local result = s
+        result = result:gsub([[\]], quote_char)
+        result = result:gsub('[%c]', quote_char)
+        local cnt_q1 = 0
+        for i in result:gmatch("'") do
+          cnt_q1 = cnt_q1 + 1
+        end
+        local cnt_q2 = 0
+        for i in result:gmatch('"') do
+          cnt_q2 = cnt_q2 + 1
+        end
+        if (cnt_q1 <= cnt_q2) then
+          result = "'" .. result:gsub("'", custom_quotes["'"]) .. "'"
         else
-          result = s
+          result = '"' .. result:gsub('"', custom_quotes['"']) .. '"'
         end
         return result
       end
   end
-return require('test')
+_G.package.preload['workshop.concepts.lua.quote_string.dump'] =
+  function(...)
+    local quote_char = request('quote_char')
+    return
+      function(s)
+        assert_string(s)
+        return "'" .. s:gsub('.', quote_char) .. "'"
+      end
+  end
+_G.package.preload['workshop.concepts.lua.quote_string.quote_char'] =
+  function(...)
+    return
+      function(c)
+        return ([[\x%02X]]):format(c:byte(1, 1))
+      end
+  end
+_G.package.preload['workshop.concepts.lua.quote_string.custom_quotes'] =
+  function(...)
+    return
+      {
+        ['\x07'] = [[\a]],
+        ['\x08'] = [[\b]],
+        ['\x09'] = [[\t]],
+        ['\x0a'] = [[\n]],
+        ['\x0b'] = [[\v]],
+        ['\x0c'] = [[\f]],
+        ['\x0d'] = [[\r]],
+        ['"'] = [[\"]],
+        ["'"] = [[\']],
+        ['\\'] = [[\\]],
+      }
+  end
+_G.package.preload['workshop.concepts.list.to_string'] =
+  function(...)
+    local to_string =
+      function(List, separator_str)
+        assert_table(List)
+        separator_str = separator_str or ''
+        assert_string(separator_str)
+        return table.concat(List, separator_str)
+      end
+    return to_string
+  end
+_G.package.preload['workshop.concepts.list.add_item'] =
+  function(...)
+    local add_item =
+      function(OurList, item)
+        table.insert(OurList, item)
+      end
+    return add_item
+  end
+_G.package.preload['workshop.concepts.codec_lua_graph.compile'] =
+  function(...)
+    local ordered_pass = request('!.table.ordered_pass')
+    local get_ast = request('compile.get_ast')
+    local GraphSerializer = request('compile.GraphSerializer')
+    local formatter_minimal = request('compile.Formatters.minimal')
+    local formatter_readable_short = request('compile.Formatters.readable_short')
+    local formatter_readable_long = request('compile.Formatters.readable_long')
+    local set_style =
+      function(style_str, GraphSerializer)
+        local Formaters_Map =
+          {
+            ['minimal'] = formatter_minimal,
+            ['readable_short'] = formatter_readable_short,
+            ['readable_long'] = formatter_readable_long,
+          }
+        local formatter = Formaters_Map[style_str]
+        if not is_function(formatter) then
+          error('No formatter for given style.')
+        end
+        formatter(GraphSerializer.Config)
+      end
+    local original_stream_write
+    local last_char = ''
+    local write_avoiding_syntax_clash =
+      function(Output, str)
+        local next_char = string.sub(str, 1, 1)
+        if (last_char == '[') and (next_char == '[') then
+          original_stream_write(Output, ' ')
+        end
+        original_stream_write(Output, str)
+        last_char = string.sub(str, -1)
+      end
+    local DefaultOptions = {style = 'readable_long', table_iterator = ordered_pass}
+    local set_field =
+      function(BaseTable, OptTable, field_name)
+        if not is_table(OptTable) then
+          return
+        end
+        if is_nil(OptTable[field_name]) then
+          return
+        end
+        BaseTable[field_name] = OptTable[field_name]
+      end
+    local compile =
+      function(Graph, Output, ArgOptions)
+        assert_table(Graph)
+        local Options = new(DefaultOptions, ArgOptions)
+        local style = Options.style
+        local table_iterator = Options.table_iterator
+        local Ast = get_ast(Graph, table_iterator)
+        original_stream_write = Output.Write
+        Output.Write = write_avoiding_syntax_clash
+        do
+          local GraphSerializer = new(GraphSerializer)
+          local Config = GraphSerializer.Config
+          Config.Output = Output
+          set_style(style, GraphSerializer)
+          set_field(Config, ArgOptions, 'use_compact_indices')
+          set_field(Config, ArgOptions, 'use_compact_sequences')
+          set_field(Config, ArgOptions, 'omit_tail_delimiter')
+          GraphSerializer:SerializeGraph(Ast, Output)
+        end
+        Output.Write = original_stream_write
+      end
+    return compile
+  end
+_G.package.preload['workshop.concepts.codec_lua_graph.compile.get_ast'] =
+  function(...)
+    local NameGiver = request('!.mechs.name_giver')
+    local get_assembly_order = request('!.mechs.graph.assembly_order')
+    local add_to_list = request('!.concepts.list.add_item')
+    local get_num_refs =
+      function(NodeRec)
+        local num_refs = 0
+        if NodeRec.refs then
+          local Node = NodeRec.Node
+          for parent, parent_keys in pairs(NodeRec.refs) do
+            if (parent == Node) then
+              num_refs = num_refs + 1
+            end
+            for key in pairs(parent_keys) do
+              if (parent[key] == Node) then
+                num_refs = num_refs + 1
+              end
+              if (key == Node) then
+                num_refs = num_refs + 1
+              end
+            end
+          end
+        end
+        return num_refs
+      end
+    local may_print_inline =
+      function(NodeRec)
+        return not NodeRec or ((get_num_refs(NodeRec) <= 1) and not NodeRec.part_of_cycle)
+      end
+    local tree_get_ast =
+      function(Data, table_iterator, NamedNodes_Map)
+        local create_ast
+        create_ast =
+          function(Data)
+            local data_type = type(Data)
+            if NamedNodes_Map[Data] then
+              return {type = 'name', value = NamedNodes_Map[Data]}
+            end
+            if (data_type ~= 'table') then
+              return {type = data_type, value = Data}
+            end
+            local Result = {type = 'table'}
+            for Key, Value in table_iterator(Data) do
+              add_to_list(Result, {Key = create_ast(Key), Value = create_ast(Value)})
+            end
+            return Result
+          end
+        return create_ast(Data)
+      end
+    local get_ast =
+      function(Data, table_iterator)
+        local NameGiver = new(NameGiver)
+        local NodeRecs, OrderedNodes =
+          get_assembly_order(Data, {also_visit_keys = true, table_iterator = table_iterator})
+        local Result = {}
+        local ProcessedTables = {}
+        local ValueNames = {}
+        for _, Node in ipairs(OrderedNodes) do
+          local NodeRec = NodeRecs[Node]
+          if not may_print_inline(NodeRec) or (Node == Data) then
+            local TableRec
+            if NodeRec.part_of_cycle then
+              TableRec = {type = 'table'}
+              for k, v in table_iterator(Node) do
+                local key_is_ok = not is_table(k) or ProcessedTables[k]
+                local value_is_ok = not is_table(v) or ProcessedTables[v]
+                if key_is_ok and value_is_ok then
+                  add_to_list(
+                    TableRec,
+                    {
+                      Key = tree_get_ast(k, table_iterator, ValueNames),
+                      Value = tree_get_ast(v, table_iterator, ValueNames),
+                    }
+                  )
+                end
+              end
+            else
+              TableRec = tree_get_ast(Node, table_iterator, ValueNames)
+            end
+            local node_name = NameGiver:give_name(Node)
+            ValueNames[Node] = node_name
+            add_to_list(Result, {type = 'local_definition', name = node_name, Value = TableRec})
+          end
+          ProcessedTables[Node] = true
+          if NodeRec.part_of_cycle then
+            for parent, parent_keys in pairs(NodeRec.refs) do
+              if ProcessedTables[parent] then
+                for parent_key in pairs(parent_keys) do
+                  local key_slot
+                  local key_name = ValueNames[parent_key]
+                  if key_name then
+                    key_slot = {type = 'name', value = key_name}
+                  else
+                    key_slot = {type = type(parent_key), value = parent_key}
+                  end
+                  add_to_list(
+                    Result,
+                    {
+                      type = 'assignment',
+                      dest_name = ValueNames[parent],
+                      IndexValue = key_slot,
+                      src_name = ValueNames[Node],
+                    }
+                  )
+                end
+              end
+            end
+          end
+        end
+        add_to_list(
+          Result, {type = 'return_statement', Value = {type = 'name', value = ValueNames[Data]}}
+        )
+        assert(#Result >= 2)
+        if (Result[#Result - 1].type == 'local_definition') then
+          table.remove(Result)
+          local LastValue = Result[#Result].Value
+          Result[#Result] = {type = 'return_statement', Value = LastValue}
+        end
+        return Result
+      end
+    return get_ast
+  end
+_G.package.preload['workshop.concepts.codec_lua_graph.compile.GraphSerializer'] =
+  function(...)
+    local serialize_terminal_value = request('!.concepts.lua.serialize_terminal_value')
+    local is_identifier = request('!.concepts.lua.is_identifier')
+    local SerializeValue =
+      function(Me, Node, Output)
+        if (Node.type ~= 'table') then
+          if (Node.type == 'name') then
+            Output:Write(Node.value)
+          else
+            local val_str = serialize_terminal_value(Node.value)
+            if is_nil(val_str) then
+              val_str = serialize_terminal_value(_G.tostring(Node.value))
+            end
+            Output:Write(val_str)
+          end
+        else
+          Me:SerializeTree(Node, Output)
+        end
+      end
+    local SerializeTree =
+      function(Me, TreeAst, Output)
+        local empty_table_str = Me.Config.empty_table_str
+        local opening_table_str = Me.Config.opening_table_str
+        local closing_table_str = Me.Config.closing_table_str
+        local equal_str = Me.Config.equal_str
+        local delimiter_str = Me.Config.delimiter_str
+        local use_compact_sequences = Me.Config.use_compact_sequences
+        local use_compact_indices = Me.Config.use_compact_indices
+        local omit_tail_delimiter = Me.Config.omit_tail_delimiter
+        local notify = Me.Config.notify
+        if (#TreeAst == 0) then
+          Output:Write(empty_table_str)
+          return
+        end
+        notify('start_table', Output)
+        Output:Write(opening_table_str)
+        local last_integer_key = 0
+        for index, Rec in ipairs(TreeAst) do
+          local is_first_rec = (index == 1)
+          if not is_first_rec then
+            notify('items_delimiter', Output)
+            Output:Write(delimiter_str)
+          end
+          notify('processing_item', Output)
+          local Key = Rec.Key
+          local Value = Rec.Value
+          local brackets_are_required
+          local skip_key_serialization =
+            (Key.type == 'number') and
+            (Key.value == last_integer_key + 1) and
+            use_compact_sequences
+          if skip_key_serialization then
+            last_integer_key = Key.value
+            goto serialize_value
+          end
+          brackets_are_required =
+            not ((Key.type == 'string') and is_identifier(Key.value)) or not use_compact_indices
+          if brackets_are_required then
+            Output:Write('[')
+          end
+          if brackets_are_required then
+            Me:SerializeValue(Key, Output)
+          else
+            Output:Write(Key.value)
+          end
+          if brackets_are_required then
+            Output:Write(']')
+          end
+          Output:Write(equal_str)
+          ::serialize_value::
+          Me:SerializeValue(Value, Output)
+        end
+        if not omit_tail_delimiter then
+          notify('items_delimiter', Output)
+          Output:Write(delimiter_str)
+        end
+        notify('end_table', Output)
+        Output:Write(closing_table_str)
+      end
+    local SerializeGraph =
+      function(Me, GraphAst, Output)
+        local Output = Me.Config.Output
+        local use_compact_indices = Me.Config.use_compact_indices
+        local equal_str = Me.Config.equal_str
+        for index, Rec in ipairs(GraphAst) do
+          local rec_type = Rec.type
+          if (rec_type == 'local_definition') then
+            local name = Rec.name
+            local Value = Rec.Value
+            Output:Write('local')
+            Output:Write(' ')
+            Output:Write(name)
+            Output:Write(equal_str)
+            Me:SerializeValue(Value, Output)
+            Output:Write('\n')
+          elseif (rec_type == 'assignment') then
+            local dest_name = Rec.dest_name
+            local Index = Rec.IndexValue
+            local src_name = Rec.src_name
+            Output:Write(dest_name)
+            local brackets_not_required =
+              use_compact_indices and (Index.type == 'string') and is_identifier(Index.value)
+            if brackets_not_required then
+              Output:Write('.')
+              Output:Write(Index.value)
+            else
+              Output:Write('[')
+              Me:SerializeValue(Index, Output)
+              Output:Write(']')
+            end
+            Output:Write(equal_str)
+            Output:Write(src_name)
+            Output:Write('\n')
+          elseif (rec_type == 'return_statement') then
+            local Value = Rec.Value
+            Output:Write('return')
+            Output:Write(' ')
+            Me:SerializeValue(Value, Output)
+            Output:Write('\n')
+          else
+            error('Unknown record type ( ' .. rec_type .. ' )')
+          end
+        end
+      end
+    local Interface =
+      {
+        SerializeGraph = SerializeGraph,
+        Config =
+          {
+            use_compact_indices = true,
+            use_compact_sequences = true,
+            omit_tail_delimiter = true,
+            empty_table_str = '{}',
+            opening_table_str = '{',
+            closing_table_str = '}',
+            delimiter_str = ',',
+            equal_str = '=',
+            notify =
+              function(event_name, Output)
+              end,
+          },
+        SerializeValue = SerializeValue,
+        SerializeTree = SerializeTree,
+      }
+    return Interface
+  end
+_G.package.preload['workshop.concepts.codec_lua_graph.compile.Formatters.readable_long'] =
+  function(...)
+    local Indent = request('!.concepts.Indent')
+    local patch_table = request('!.table.patch')
+    Indent = Indent.create()
+    local emit_indent =
+      function(Output)
+        Output:Write('\n')
+        if (Indent.RangePoint.value == 0) then
+          return
+        end
+        Output:Write(Indent:ToString())
+      end
+    local prev_event_name = 'nothing'
+    local on_notify =
+      function(next_event_name, Output)
+        if (next_event_name == 'start_table') then
+          Indent:Inc()
+        elseif (next_event_name == 'end_table') then
+          Indent:Dec()
+        end
+        if
+          ((prev_event_name == 'start_table') and (next_event_name ~= 'end_table')) or
+          (prev_event_name == 'items_delimiter') or
+          ((prev_event_name ~= 'start_table') and (next_event_name == 'end_table'))
+        then
+          emit_indent(Output)
+        end
+        prev_event_name = next_event_name
+      end
+    local install =
+      function(Config)
+        patch_table(
+          Config,
+          {
+            use_compact_indices = true,
+            use_compact_sequences = false,
+            omit_tail_delimiter = false,
+            empty_table_str = '{ }',
+            opening_table_str = '{',
+            closing_table_str = '}',
+            delimiter_str = ', ',
+            equal_str = ' = ',
+            notify = on_notify,
+          }
+        )
+      end
+    return install
+  end
+_G.package.preload['workshop.concepts.codec_lua_graph.compile.Formatters.readable_short'] =
+  function(...)
+    local patch_table = request('!.table.patch')
+    local install =
+      function(Config)
+        patch_table(
+          Config,
+          {
+            use_compact_indices = true,
+            use_compact_sequences = true,
+            omit_tail_delimiter = true,
+            empty_table_str = '{ }',
+            opening_table_str = '{ ',
+            closing_table_str = ' }',
+            delimiter_str = ', ',
+            equal_str = ' = ',
+          }
+        )
+      end
+    return install
+  end
+_G.package.preload['workshop.concepts.codec_lua_graph.compile.Formatters.minimal'] =
+  function(...)
+    local patch_table = request('!.table.patch')
+    local install =
+      function(Config)
+        patch_table(
+          Config,
+          {
+            use_compact_indices = true,
+            use_compact_sequences = true,
+            omit_tail_delimiter = true,
+            empty_table_str = '{}',
+            opening_table_str = '{',
+            closing_table_str = '}',
+            delimiter_str = ',',
+            equal_str = '=',
+          }
+        )
+      end
+    return install
+  end
+_G.package.preload['workshop.concepts.StreamIo.Output.String'] =
+  function(...)
+    local list_add_item = request('!.concepts.list.add_item')
+    local list_to_string = request('!.concepts.list.to_string')
+    local Interface =
+      {
+        Write =
+          function(Me, data_str)
+            assert_string(data_str)
+            assert(data_str ~= '')
+            list_add_item(Me.Chunks, data_str)
+          end,
+        GetString =
+          function(Me)
+            return list_to_string(Me.Chunks)
+          end,
+        Chunks = {},
+      }
+    return Interface
+  end
+return require('serialize_lua_graph')
