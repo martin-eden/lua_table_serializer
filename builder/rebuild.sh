@@ -4,7 +4,7 @@
 
 #
 # Author: Martin Eden
-# Last mod.: 2026-06-20
+# Last mod.: 2026-07-06
 #
 
 #
@@ -44,11 +44,12 @@ cd ../builder
 # Combine all Lua code
 ./meld ../src/ serialize_lua_graph > ../deploy/serialize_lua_graph.melded.lua
 
-# Strip comments
+# Reformat code and strip comments
 ./reformat_lua \
   ../deploy/serialize_lua_graph.melded.lua \
   ../deploy/serialize_lua_graph.melded.stripped.lua \
-  --~keep-comments
+  --~keep-comments \
+  --right-margin=72
 rm ../deploy/serialize_lua_graph.melded.lua
 
 mv \
