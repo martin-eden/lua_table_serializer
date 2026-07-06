@@ -3204,7 +3204,7 @@ _G.package.preload['workshop.formats.lua.formatter.handlers.expressions.table'] 
     local oneliner =
       function(self, node)
         local printer = self.printer
-        printer:add_curline('{')
+        printer:add_curline('{ ')
         for i = 1, #node do
           if (i > 1) then
             printer:add_curline(', ')
@@ -3220,7 +3220,7 @@ _G.package.preload['workshop.formats.lua.formatter.handlers.expressions.table'] 
             return
           end
         end
-        printer:add_curline('}')
+        printer:add_curline(' }')
         return true
       end
     local multiliner =
