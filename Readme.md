@@ -77,7 +77,7 @@ Serializer function supports three _behavior flags_:
 ## Rebuild
 
   * Clone [`workshop`][workshop] repo
-  * Checkout it to date near `2026-06-20`
+  * Checkout it to date near `2026-07-06`
   * Modify `package.path` in [`builder/create_deploy.lua`][create_deploy]
     so it can find your cloned `workshop` repo
   * Run [`builder/rebuild.sh`][builder]
