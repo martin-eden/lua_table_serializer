@@ -8,33 +8,27 @@ _G.package.preload['workshop.base'] =
     local split_name =
       function(qualified_name)
         local prefix_name_pattern = '^(.+%.)([^%.]+)$'
-        local prefix, name = qualified_name:match(prefix_name_pattern)
+        local prefix, name =
+          string.match(qualified_name, prefix_name_pattern)
         if not prefix then
           prefix = ''
-          name = qualified_name
-          if not name:find('^([^%.]+)$') then
+          if string.find(qualified_name, '%.') then
             name = ''
+          else
+            name = qualified_name
           end
         end
         return prefix, name
       end
     local unite_prefixes =
       function(base_prefix, rel_prefix)
-        local init_base_prefix, init_rel_prefix =
-          base_prefix, rel_prefix
-        local list_without_tail_pattern = '(.+%.)[^%.]-%.$'
-        local list_without_head_pattern = '[^%.]+%.(.+)$'
-        while rel_prefix:find('^%^%.') do
+        local uplevel_capture = '(.+%.)[^%.]-%.$'
+        while (string.sub(rel_prefix, 1, 2) == '^.') do
           if (base_prefix == '') then
-            error(
-              ([[Link "%s" is outside of caller's prefix "%s".]]):format(
-                init_rel_prefix, init_base_prefix
-              )
-            )
+            error("Link is outside of caller's prefix.")
           end
-          base_prefix =
-            base_prefix:match(list_without_tail_pattern) or ''
-          rel_prefix = rel_prefix:match(list_without_head_pattern) or ''
+          base_prefix = string.match(base_prefix, uplevel_capture) or ''
+          rel_prefix = string.sub(rel_prefix, 3)
         end
         return base_prefix .. rel_prefix
       end
@@ -42,19 +36,19 @@ _G.package.preload['workshop.base'] =
     local depth = 1
     local get_caller_prefix =
       function()
-        local result = ''
-        if Names[depth] then
-          result = Names[depth].prefix
+        local NameRec = Names[depth]
+        if not NameRec then
+          return ''
         end
-        return result
+        return NameRec.prefix
       end
     local get_caller_name =
       function()
-        local result = 'anonymous'
-        if Names[depth] then
-          result = Names[depth].prefix .. Names[depth].name
+        local NameRec = Names[depth]
+        if not NameRec then
+          return 'anonymous'
         end
-        return result
+        return NameRec.prefix .. NameRec.name
       end
     local push =
       function(prefix, name)
@@ -75,9 +69,10 @@ _G.package.preload['workshop.base'] =
     local get_require_name =
       function(qualified_name)
         local caller_prefix
-        local is_absolute_name = (qualified_name:sub(1, 2) == '!.')
+        local is_absolute_name =
+          (string.sub(qualified_name, 1, 2) == '!.')
         if is_absolute_name then
-          qualified_name = qualified_name:sub(3)
+          qualified_name = string.sub(qualified_name, 3)
           caller_prefix = base_prefix
         else
           caller_prefix = get_caller_prefix()
@@ -407,8 +402,8 @@ _G.package.preload['workshop.table.patch'] =
         assert_table(Additions)
         local Rules =
           {
-            { HasA = true, HasB = true, Action = 'use_b' },
-            { HasA = false, HasB = true, Action = 'use_a' },
+            { has_a = true, has_b = true, action = 'use_b' },
+            { has_a = false, has_b = true, action = 'use_a' },
           }
         apply_table(Result, Additions, Rules)
       end
@@ -461,10 +456,8 @@ _G.package.preload['workshop.table.apply_table'] =
     local get_action =
       function(has_a, has_b, Rules)
         for _, Rule in ipairs(Rules) do
-          local is_same_signature =
-            (Rule.HasA == has_a) and (Rule.HasB == has_b)
-          if is_same_signature then
-            return Rule.Action
+          if (Rule.has_a == has_a) and (Rule.has_b == has_b) then
+            return Rule.action
           end
         end
         return use_a_str
@@ -472,8 +465,6 @@ _G.package.preload['workshop.table.apply_table'] =
     local apply_table
     apply_table =
       function(A, B, Rules)
-        local a_type = type(A)
-        local b_type = type(B)
         local Keys = {}
         do
           for a_key in pairs(A) do
@@ -484,16 +475,17 @@ _G.package.preload['workshop.table.apply_table'] =
           end
         end
         for key in pairs(Keys) do
-          local has_a = not is_nil(A[key])
-          local has_b = not is_nil(B[key])
-          local a_is_table = has_a and is_table(A[key])
-          local b_is_table = has_b and is_table(B[key])
+          local a_key = A[key]
+          local b_key = B[key]
+          local a_is_table = is_table(a_key)
+          local b_is_table = is_table(b_key)
           if a_is_table and b_is_table then
-            apply_table(A[key], B[key], Rules)
+            apply_table(a_key, b_key, Rules)
           else
+            local has_a = not is_nil(a_key)
+            local has_b = not is_nil(b_key)
             local action = get_action(has_a, has_b, Rules)
-            if (action == use_a_str) then
-            elseif (action == use_b_str) then
+            if (action == use_b_str) then
               A[key] = B[key]
             end
           end
@@ -501,12 +493,12 @@ _G.package.preload['workshop.table.apply_table'] =
       end
     local check_rule =
       function(Rule)
-        local has_a = is_boolean(Rule.HasA)
-        local has_b = is_boolean(Rule.HasB)
-        local action = Rule.Action
+        local has_a = is_boolean(Rule.has_a)
+        local has_b = is_boolean(Rule.has_b)
+        local action = Rule.action
         local is_known_action =
           (action == use_a_str) or (action == use_b_str)
-        return has_a, has_b, is_known_action
+        return has_a and has_b and is_known_action
       end
     local apply_table_root =
       function(A, B, Rules)
@@ -514,11 +506,8 @@ _G.package.preload['workshop.table.apply_table'] =
         assert_table(B)
         assert_table(Rules)
         for index, Rule in ipairs(Rules) do
-          local has_a, has_b, is_known_action = check_rule(Rule)
-          if not (has_a and has_b and is_known_action) then
-            local err_msg =
-              'Unsupported rule at index ' .. tostring(index)
-            error(err_msg, 2)
+          if not check_rule(Rule) then
+            error('Unsupported rule.')
           end
         end
         apply_table(A, B, Rules)
@@ -877,118 +866,122 @@ _G.package.preload['workshop.concepts.lua.serialize_terminal_value'] =
   end
 _G.package.preload['workshop.concepts.lua.quote_string'] =
   function(...)
-    local quote_escaped = request('quote_string.linear')
-    local quote_intact = request('quote_string.intact')
-    local quote_aggressive = request('quote_string.dump')
+    local quote_variable = request('quote_string.intact')
     local content_funcs = request('!.string.content_attributes')
+    local str_gmatch = string.gmatch
+    local str_gsub = string.gsub
+    local str_format = string.format
+    local str_byte = string.byte
     local has_control_chars = content_funcs.has_control_chars
     local has_backslashes = content_funcs.has_backslashes
     local has_single_quotes = content_funcs.has_single_quotes
     local has_double_quotes = content_funcs.has_double_quotes
     local has_newlines = content_funcs.has_newlines
     local binary_entities_lengths =
-      { [1] = true, [2] = true, [4] = true, [8] = true, [16] = true }
-    return
-      function(s)
-        assert_string(s)
-        local quote_func = quote_escaped
-        if binary_entities_lengths[#s] and has_control_chars(s) then
-          quote_func = quote_aggressive
-        elseif
-          has_backslashes(s) or
-          has_newlines(s) or
-          (has_single_quotes(s) and has_double_quotes(s))
-        then
-          quote_func = quote_intact
+      {
+        [1 << 0] = true,
+        [1 << 1] = true,
+        [1 << 2] = true,
+        [1 << 3] = true,
+      }
+    local determine_fixed_quote_char =
+      function(str)
+        local quote_char
+        local single_quote = "'"
+        local double_quote = '"'
+        local num_single_quotes = 0
+        local num_double_quotes = 0
+        for _ in str_gmatch(str, single_quote) do
+          num_single_quotes = num_single_quotes + 1
         end
-        local result = quote_func(s)
-        return result
+        for _ in str_gmatch(str, double_quote) do
+          num_double_quotes = num_double_quotes + 1
+        end
+        if (num_single_quotes <= num_double_quotes) then
+          quote_char = single_quote
+        else
+          quote_char = double_quote
+        end
+        return quote_char
       end
+    local quote_char_func =
+      function(char)
+        return str_format([[\%03d]], str_byte(char, 1, 1))
+      end
+    local quote_string =
+      function(str)
+        local str_has_control_chars = has_control_chars(str)
+        local use_variable_quotes =
+          (
+            has_backslashes(str) or
+            has_newlines(str) or
+            (has_single_quotes(str) and has_double_quotes(str))
+          ) and
+          not str_has_control_chars
+        if use_variable_quotes then
+          return quote_variable(str)
+        else
+          local quote_char = determine_fixed_quote_char(str)
+          local quote_all = false
+          local quote_control = false
+          if str_has_control_chars then
+            if binary_entities_lengths[#str] then
+              quote_all = true
+            else
+              quote_control = true
+            end
+          end
+          if quote_all then
+            str = str_gsub(str, '.', quote_char_func)
+          else
+            local backslash = [[\]]
+            str = str_gsub(str, backslash, backslash .. backslash)
+            str = str_gsub(str, quote_char, backslash .. quote_char)
+            if quote_control then
+              str = str_gsub(str, '[%c]', quote_char_func)
+            end
+          end
+          return quote_char .. str .. quote_char
+        end
+      end
+    return quote_string
   end
 _G.package.preload['workshop.concepts.lua.quote_string.intact'] =
   function(...)
     local has_newlines =
       request('!.string.content_attributes').has_newlines
     return
-      function(s)
-        assert_string(s)
-        s = s .. ']'
-        local eq_chunk = ''
-        local postfix
-        while true do
-          postfix = ']' .. eq_chunk .. ']'
-          if not s:find(postfix, 1, true) then
-            break
+      function(str)
+        local opening_bracket = '['
+        local closing_bracket = ']'
+        local filler_char = '='
+        local newline_char = '\010'
+        local return_char = '\013'
+        str = str .. closing_bracket
+        local filler_chunk = ''
+        do
+          while true do
+            local postfix =
+              closing_bracket .. filler_chunk .. closing_bracket
+            if not string.find(str, postfix) then
+              break
+            end
+            filler_chunk = filler_chunk .. filler_char
           end
-          eq_chunk = eq_chunk .. '='
         end
-        local prefix = '[' .. eq_chunk .. '['
-        local first_char = s:sub(1, 1)
-        if (first_char == '\x0D') or (first_char == '\x0A') then
+        local prefix =
+          opening_bracket .. filler_chunk .. opening_bracket
+        local first_char = string.sub(str, 1, 1)
+        if
+          (first_char == newline_char) or (first_char == return_char)
+        then
           prefix = prefix .. first_char
         end
-        if has_newlines(s) then
-          prefix = prefix .. '\x0A'
+        if has_newlines(str) then
+          prefix = prefix .. newline_char
         end
-        return prefix .. s .. eq_chunk .. ']'
+        return prefix .. str .. filler_chunk .. closing_bracket
       end
-  end
-_G.package.preload['workshop.concepts.lua.quote_string.linear'] =
-  function(...)
-    local quote_char = request('quote_char')
-    local custom_quotes = request('custom_quotes')
-    return
-      function(s)
-        local result = s
-        result = result:gsub([[\]], quote_char)
-        result = result:gsub('[%c]', quote_char)
-        local cnt_q1 = 0
-        for i in result:gmatch("'") do
-          cnt_q1 = cnt_q1 + 1
-        end
-        local cnt_q2 = 0
-        for i in result:gmatch('"') do
-          cnt_q2 = cnt_q2 + 1
-        end
-        if (cnt_q1 <= cnt_q2) then
-          result = "'" .. result:gsub("'", custom_quotes["'"]) .. "'"
-        else
-          result = '"' .. result:gsub('"', custom_quotes['"']) .. '"'
-        end
-        return result
-      end
-  end
-_G.package.preload['workshop.concepts.lua.quote_string.dump'] =
-  function(...)
-    local quote_char = request('quote_char')
-    return
-      function(s)
-        assert_string(s)
-        return "'" .. s:gsub('.', quote_char) .. "'"
-      end
-  end
-_G.package.preload['workshop.concepts.lua.quote_string.quote_char'] =
-  function(...)
-    return
-      function(c)
-        return ([[\x%02X]]):format(c:byte(1, 1))
-      end
-  end
-_G.package.preload['workshop.concepts.lua.quote_string.custom_quotes'] =
-  function(...)
-    return
-      {
-        ['\x07'] = [[\a]],
-        ['\x08'] = [[\b]],
-        ['\x09'] = [[\t]],
-        ['\x0a'] = [[\n]],
-        ['\x0b'] = [[\v]],
-        ['\x0c'] = [[\f]],
-        ['\x0d'] = [[\r]],
-        ['"'] = [[\"]],
-        ["'"] = [[\']],
-        ['\\'] = [[\\]],
-      }
   end
 _G.package.preload['workshop.concepts.list.to_string'] =
   function(...)
@@ -1102,19 +1095,48 @@ _G.package.preload['workshop.concepts.codec_lua_graph.compile.get_ast'] =
       end
     local create_assignment_rec =
       function(dest, index, value)
-        return { 'assignment', dest, index, value }
+        return { 'key_assignment', dest, index, value }
       end
     local create_return_rec =
       function(Value)
         return { 'return_statement', Value }
       end
-    local tree_get_ast =
-      function(Data, table_iterator, NamedNodes_Map)
-        local create_ast
-        create_ast =
+    local get_num_refs =
+      function(NodeRec)
+        local Node = NodeRec.Node
+        local Refs = NodeRec.refs
+        local num_refs = 0
+        for Parent, ParentKeys in pairs(Refs) do
+          if (Parent == Node) then
+            num_refs = num_refs + 1
+          end
+          for Key in pairs(ParentKeys) do
+            if (Key == Node) then
+              num_refs = num_refs + 1
+            end
+            if (Parent[Key] == Node) then
+              num_refs = num_refs + 1
+            end
+          end
+        end
+        return num_refs
+      end
+    local may_print_inline =
+      function(NodeRec)
+        if not NodeRec then
+          return true
+        end
+        return
+          ((get_num_refs(NodeRec) <= 1) and not NodeRec.part_of_cycle)
+      end
+    local get_ast =
+      function(Root, table_iterator)
+        local NamedValues = {}
+        local get_tree_ast
+        get_tree_ast =
           function(Data)
-            if NamedNodes_Map[Data] then
-              return create_name_rec(NamedNodes_Map[Data])
+            if NamedValues[Data] then
+              return create_name_rec(NamedValues[Data])
             end
             if not is_table(Data) then
               return create_terminal_type_rec(Data)
@@ -1123,54 +1145,22 @@ _G.package.preload['workshop.concepts.codec_lua_graph.compile.get_ast'] =
             local KeyVals = Result[2]
             for Key, Value in table_iterator(Data) do
               add_to_list(
-                KeyVals, { create_ast(Key), create_ast(Value) }
+                KeyVals, { get_tree_ast(Key), get_tree_ast(Value) }
               )
             end
             return Result
           end
-        return create_ast(Data)
-      end
-    local get_num_refs =
-      function(NodeRec)
-        local num_refs = 0
-        if NodeRec.refs then
-          local Node = NodeRec.Node
-          for parent, parent_keys in pairs(NodeRec.refs) do
-            if (parent == Node) then
-              num_refs = num_refs + 1
-            end
-            for key in pairs(parent_keys) do
-              if (parent[key] == Node) then
-                num_refs = num_refs + 1
-              end
-              if (key == Node) then
-                num_refs = num_refs + 1
-              end
-            end
-          end
-        end
-        return num_refs
-      end
-    local may_print_inline =
-      function(NodeRec)
-        return
-          not NodeRec or
-          ((get_num_refs(NodeRec) <= 1) and not NodeRec.part_of_cycle)
-      end
-    local get_ast =
-      function(Data, table_iterator)
         local NameGiver = new(NameGiver)
         local NodeRecs, OrderedNodes =
           get_assembly_order(
-            Data,
+            Root,
             { also_visit_keys = true, table_iterator = table_iterator }
           )
         local Result = {}
         local ProcessedTables = {}
-        local ValueNames = {}
         for _, Node in ipairs(OrderedNodes) do
           local NodeRec = NodeRecs[Node]
-          if not may_print_inline(NodeRec) or (Node == Data) then
+          if (Node == Root) or not may_print_inline(NodeRec) then
             local TableRec
             if NodeRec.part_of_cycle then
               TableRec = create_table_rec()
@@ -1179,21 +1169,19 @@ _G.package.preload['workshop.concepts.codec_lua_graph.compile.get_ast'] =
                 local key_is_ok = not is_table(k) or ProcessedTables[k]
                 local value_is_ok =
                   not is_table(v) or ProcessedTables[v]
-                if key_is_ok and value_is_ok then
-                  add_to_list(
-                    KeyVals,
-                    {
-                      tree_get_ast(k, table_iterator, ValueNames),
-                      tree_get_ast(v, table_iterator, ValueNames),
-                    }
-                  )
+                if not (key_is_ok and value_is_ok) then
+                  goto next
                 end
+                add_to_list(
+                  KeyVals, { get_tree_ast(k), get_tree_ast(v) }
+                )
+                ::next::
               end
             else
-              TableRec = tree_get_ast(Node, table_iterator, ValueNames)
+              TableRec = get_tree_ast(Node)
             end
             local node_name = NameGiver:give_name(Node)
-            ValueNames[Node] = node_name
+            NamedValues[Node] = node_name
             add_to_list(
               Result, create_local_def_rec(node_name, TableRec)
             )
@@ -1203,12 +1191,11 @@ _G.package.preload['workshop.concepts.codec_lua_graph.compile.get_ast'] =
             for Parent, ParentKeys in pairs(NodeRec.refs) do
               if ProcessedTables[Parent] then
                 for parent_key in pairs(ParentKeys) do
-                  local key_slot =
-                    tree_get_ast(parent_key, table_iterator, ValueNames)
+                  local key_slot = get_tree_ast(parent_key)
                   add_to_list(
                     Result,
                     create_assignment_rec(
-                      ValueNames[Parent], key_slot, ValueNames[Node]
+                      NamedValues[Parent], key_slot, NamedValues[Node]
                     )
                   )
                 end
@@ -1217,11 +1204,12 @@ _G.package.preload['workshop.concepts.codec_lua_graph.compile.get_ast'] =
           end
         end
         add_to_list(
-          Result, create_return_rec(create_name_rec(ValueNames[Data]))
+          Result, create_return_rec(create_name_rec(NamedValues[Root]))
         )
-        local prelast_type = Result[#Result - 1][1]
+        local PrelastNode = Result[#Result - 1]
+        local prelast_type = PrelastNode[1]
         if (prelast_type == 'local_definition') then
-          local prelast_value = Result[#Result - 1][3]
+          local prelast_value = PrelastNode[3]
           table.remove(Result)
           table.remove(Result)
           add_to_list(Result, create_return_rec(prelast_value))
@@ -1331,7 +1319,7 @@ _G.package.preload[
             Output:Write(equal_str)
             Me:SerializeValue(Value, Output)
             Output:Write('\n')
-          elseif (rec_type == 'assignment') then
+          elseif (rec_type == 'key_assignment') then
             local dest_name = Rec[2]
             local Key = Rec[3]
             local src_name = Rec[4]
@@ -1393,10 +1381,11 @@ _G.package.preload[
     local emit_indent =
       function(Output)
         Output:Write('\n')
-        if (Indent:GetRangePoint():GetValue() == 0) then
+        local indent_str = Indent:ToString()
+        if (indent_str == '') then
           return
         end
-        Output:Write(Indent:ToString())
+        Output:Write(indent_str)
       end
     local prev_event_name = 'nothing'
     local on_notify =
