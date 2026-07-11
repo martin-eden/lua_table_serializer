@@ -4,7 +4,7 @@
 
 #
 # Author: Martin Eden
-# Last mod.: 2026-07-06
+# Last mod.: 2026-07-11
 #
 
 #
@@ -55,6 +55,8 @@ rm ../deploy/serialize_lua_graph.melded.lua
 mv \
   ../deploy/serialize_lua_graph.melded.stripped.lua \
   ../deploy/serialize_lua_graph.lua
+
+echo
 
 # Call test script
 cd ../test
