@@ -393,18 +393,9 @@ _G.package.preload['workshop.table.new'] =
 _G.package.preload['workshop.table.patch'] =
   function(...)
     local apply_table = request('apply_table')
+    local Rules = { { has_a = true, has_b = true, action = 'replace' } }
     local patch =
       function(Result, Additions)
-        assert_table(Result)
-        if is_nil(Additions) then
-          return
-        end
-        assert_table(Additions)
-        local Rules =
-          {
-            { has_a = true, has_b = true, action = 'use_b' },
-            { has_a = false, has_b = true, action = 'use_a' },
-          }
         apply_table(Result, Additions, Rules)
       end
     return patch
@@ -437,6 +428,14 @@ _G.package.preload['workshop.table.create_instance'] =
       end
     return create_instance
   end
+_G.package.preload['workshop.table.is_empty'] =
+  function(...)
+    return
+      function(t)
+        assert_table(t)
+        return is_nil(next(t))
+      end
+  end
 _G.package.preload['workshop.table.get_key_vals'] =
   function(...)
     return
@@ -451,8 +450,9 @@ _G.package.preload['workshop.table.get_key_vals'] =
   end
 _G.package.preload['workshop.table.apply_table'] =
   function(...)
-    local use_a_str = 'use_a'
-    local use_b_str = 'use_b'
+    local keep_str = 'keep'
+    local replace_str = 'replace'
+    local remove_str = 'remove'
     local get_action =
       function(has_a, has_b, Rules)
         for _, Rule in ipairs(Rules) do
@@ -460,7 +460,7 @@ _G.package.preload['workshop.table.apply_table'] =
             return Rule.action
           end
         end
-        return use_a_str
+        return keep_str
       end
     local apply_table
     apply_table =
@@ -477,16 +477,18 @@ _G.package.preload['workshop.table.apply_table'] =
         for key in pairs(Keys) do
           local a_key = A[key]
           local b_key = B[key]
-          local a_is_table = is_table(a_key)
-          local b_is_table = is_table(b_key)
-          if a_is_table and b_is_table then
+          if is_table(a_key) and is_table(b_key) then
             apply_table(a_key, b_key, Rules)
           else
             local has_a = not is_nil(a_key)
             local has_b = not is_nil(b_key)
             local action = get_action(has_a, has_b, Rules)
-            if (action == use_b_str) then
+            if (action == keep_str) then
+              ;
+            elseif (action == replace_str) then
               A[key] = B[key]
+            elseif (action == remove_str) then
+              A[key] = nil
             end
           end
         end
@@ -497,7 +499,9 @@ _G.package.preload['workshop.table.apply_table'] =
         local has_b = is_boolean(Rule.has_b)
         local action = Rule.action
         local is_known_action =
-          (action == use_a_str) or (action == use_b_str)
+          (action == keep_str) or
+          (action == replace_str) or
+          (action == remove_str)
         return has_a and has_b and is_known_action
       end
     local apply_table_root =
@@ -505,6 +509,7 @@ _G.package.preload['workshop.table.apply_table'] =
         assert_table(A)
         assert_table(B)
         assert_table(Rules)
+        assert(A ~= B)
         for index, Rule in ipairs(Rules) do
           if not check_rule(Rule) then
             error('Unsupported rule.')
@@ -536,6 +541,21 @@ _G.package.preload['workshop.table.ordered_pass'] =
         return sorted_next, t
       end
     return ordered_pass
+  end
+_G.package.preload['workshop.table.intersect'] =
+  function(...)
+    local apply_table = request('apply_table')
+    local Rules =
+      {
+        { has_a = true, has_b = true, action = 'keep' },
+        { has_a = true, has_b = false, action = 'remove' },
+        { has_a = false, has_b = true, action = 'remove' },
+      }
+    local intersect_set =
+      function(A, B)
+        apply_table(A, B, Rules)
+      end
+    return intersect_set
   end
 _G.package.preload['workshop.table.attach_methods'] =
   function(...)
@@ -586,41 +606,24 @@ _G.package.preload['workshop.table.ordered_pass.compare_keys'] =
       end
     return compare_keys
   end
-_G.package.preload['workshop.string.content_attributes'] =
+_G.package.preload['workshop.string.get_chars_count'] =
   function(...)
-    local has_control_chars =
-      function(s)
-        return s:find('%c') and true
+    local str_sub = string.sub
+    local str_byte = string.byte
+    local get_chars_count =
+      function(str)
+        local UsedChars_Map = {}
+        for index = 1, #str do
+          local char = str_sub(str, index, index)
+          local code = str_byte(char)
+          if is_nil(UsedChars_Map[code]) then
+            UsedChars_Map[code] = 0
+          end
+          UsedChars_Map[code] = UsedChars_Map[code] + 1
+        end
+        return UsedChars_Map
       end
-    local has_backslashes =
-      function(s)
-        return s:find([[%\]]) and true
-      end
-    local has_single_quotes =
-      function(s)
-        return s:find([[%']]) and true
-      end
-    local has_double_quotes =
-      function(s)
-        return s:find([[%"]]) and true
-      end
-    local is_nonascii =
-      function(s)
-        return s:find('[^%w%s_%p]')
-      end
-    local has_newlines =
-      function(s)
-        return s:find('[\n\r]')
-      end
-    return
-      {
-        has_control_chars = has_control_chars,
-        has_backslashes = has_backslashes,
-        has_single_quotes = has_single_quotes,
-        has_double_quotes = has_double_quotes,
-        is_nonascii = is_nonascii,
-        has_newlines = has_newlines,
-      }
+    return get_chars_count
   end
 _G.package.preload['workshop.convert.table_to_str'] =
   function(...)
@@ -634,6 +637,15 @@ _G.package.preload['workshop.convert.table_to_str'] =
         return StringStream:GetString()
       end
     return table_to_str
+  end
+_G.package.preload['workshop.concepts.AsciiControlCodes_Map'] =
+  function(...)
+    local ControlCodes_Map = {}
+    for code = 0, 31 do
+      ControlCodes_Map[code] = true
+    end
+    ControlCodes_Map[127] = true
+    return ControlCodes_Map
   end
 _G.package.preload['workshop.concepts.Indent'] =
   function(...)
@@ -864,68 +876,92 @@ _G.package.preload['workshop.concepts.lua.serialize_terminal_value'] =
       end
     return serialize_terminal_value
   end
+_G.package.preload['workshop.concepts.lua.QuoteChars'] =
+  function(...)
+    local str_char = string.char
+    local newline_code = 10
+    local single_quote_code = 39
+    local double_quote_code = 34
+    local backslash_code = 92
+    local QuoteChars =
+      {
+        newline_code = newline_code,
+        single_quote_code = single_quote_code,
+        double_quote_code = double_quote_code,
+        backslash_code = backslash_code,
+        newline = str_char(newline_code),
+        single_quote = str_char(single_quote_code),
+        double_quote = str_char(double_quote_code),
+        backslash = str_char(backslash_code),
+      }
+    return QuoteChars
+  end
 _G.package.preload['workshop.concepts.lua.quote_string'] =
   function(...)
+    local QuoteChars = request('QuoteChars')
+    local get_chars_count = request('!.string.get_chars_count')
+    local ControlChars_Map = request('!.concepts.AsciiControlCodes_Map')
+    local intersect_set = request('!.table.intersect')
+    local is_empty_set = request('!.table.is_empty')
     local quote_variable = request('quote_string.intact')
-    local content_funcs = request('!.string.content_attributes')
-    local str_gmatch = string.gmatch
+    local quote_char_func = request('quote_string.quote_char')
+    local newline_code = QuoteChars.newline_code
     local str_gsub = string.gsub
-    local str_format = string.format
-    local str_byte = string.byte
-    local has_control_chars = content_funcs.has_control_chars
-    local has_backslashes = content_funcs.has_backslashes
-    local has_single_quotes = content_funcs.has_single_quotes
-    local has_double_quotes = content_funcs.has_double_quotes
-    local has_newlines = content_funcs.has_newlines
-    local binary_entities_lengths =
+    local has_messy_control_chars =
+      function(UsedChars)
+        local MessyControlChars = new(ControlChars_Map)
+        MessyControlChars[newline_code] = nil
+        intersect_set(MessyControlChars, UsedChars)
+        return not is_empty_set(MessyControlChars)
+      end
+    local determine_fixed_quote_char =
+      function(UsedChars)
+        local single_quote_code = QuoteChars.single_quote_code
+        local double_quote_code = QuoteChars.double_quote_code
+        local single_quote = QuoteChars.single_quote
+        local double_quote = QuoteChars.double_quote
+        local num_single_quotes = UsedChars[single_quote_code] or 0
+        local num_double_quotes = UsedChars[double_quote_code] or 0
+        if (num_single_quotes <= num_double_quotes) then
+          return single_quote
+        else
+          return double_quote
+        end
+      end
+    local BinaryEntitiesLengths_Map =
       {
         [1 << 0] = true,
         [1 << 1] = true,
         [1 << 2] = true,
         [1 << 3] = true,
       }
-    local determine_fixed_quote_char =
-      function(str)
-        local quote_char
-        local single_quote = "'"
-        local double_quote = '"'
-        local num_single_quotes = 0
-        local num_double_quotes = 0
-        for _ in str_gmatch(str, single_quote) do
-          num_single_quotes = num_single_quotes + 1
-        end
-        for _ in str_gmatch(str, double_quote) do
-          num_double_quotes = num_double_quotes + 1
-        end
-        if (num_single_quotes <= num_double_quotes) then
-          quote_char = single_quote
-        else
-          quote_char = double_quote
-        end
-        return quote_char
-      end
-    local quote_char_func =
-      function(char)
-        return str_format([[\%03d]], str_byte(char, 1, 1))
-      end
     local quote_string =
       function(str)
-        local str_has_control_chars = has_control_chars(str)
-        local use_variable_quotes =
+        local single_quote_code = QuoteChars.single_quote_code
+        local double_quote_code = QuoteChars.double_quote_code
+        local backslash_code = QuoteChars.backslash_code
+        local backslash = QuoteChars.backslash
+        local UsedChars_Map = get_chars_count(str)
+        local str_has_messy_control_chars =
+          has_messy_control_chars(UsedChars_Map)
+        local str_has_messy_printable_chars =
+          UsedChars_Map[newline_code] or
+          UsedChars_Map[backslash_code] or
           (
-            has_backslashes(str) or
-            has_newlines(str) or
-            (has_single_quotes(str) and has_double_quotes(str))
-          ) and
-          not str_has_control_chars
+            UsedChars_Map[single_quote_code] and
+            UsedChars_Map[double_quote_code]
+          )
+        local use_variable_quotes =
+          str_has_messy_printable_chars and
+          not str_has_messy_control_chars
         if use_variable_quotes then
           return quote_variable(str)
         else
-          local quote_char = determine_fixed_quote_char(str)
+          local quote_char = determine_fixed_quote_char(UsedChars_Map)
           local quote_all = false
           local quote_control = false
-          if str_has_control_chars then
-            if binary_entities_lengths[#str] then
+          if str_has_messy_control_chars then
+            if BinaryEntitiesLengths_Map[#str] then
               quote_all = true
             else
               quote_control = true
@@ -934,7 +970,6 @@ _G.package.preload['workshop.concepts.lua.quote_string'] =
           if quote_all then
             str = str_gsub(str, '.', quote_char_func)
           else
-            local backslash = [[\]]
             str = str_gsub(str, backslash, backslash .. backslash)
             str = str_gsub(str, quote_char, backslash .. quote_char)
             if quote_control then
@@ -948,9 +983,9 @@ _G.package.preload['workshop.concepts.lua.quote_string'] =
   end
 _G.package.preload['workshop.concepts.lua.quote_string.intact'] =
   function(...)
-    local has_newlines =
-      request('!.string.content_attributes').has_newlines
-    return
+    local str_find = string.find
+    local str_sub = string.sub
+    local quote_long =
       function(str)
         local opening_bracket = '['
         local closing_bracket = ']'
@@ -963,7 +998,7 @@ _G.package.preload['workshop.concepts.lua.quote_string.intact'] =
           while true do
             local postfix =
               closing_bracket .. filler_chunk .. closing_bracket
-            if not string.find(str, postfix) then
+            if not str_find(str, postfix) then
               break
             end
             filler_chunk = filler_chunk .. filler_char
@@ -971,17 +1006,30 @@ _G.package.preload['workshop.concepts.lua.quote_string.intact'] =
         end
         local prefix =
           opening_bracket .. filler_chunk .. opening_bracket
-        local first_char = string.sub(str, 1, 1)
+        local first_char = str_sub(str, 1, 1)
         if
           (first_char == newline_char) or (first_char == return_char)
         then
           prefix = prefix .. first_char
         end
-        if has_newlines(str) then
+        local has_newlines = not is_nil(str_find(str, newline_char))
+        if has_newlines then
           prefix = prefix .. newline_char
         end
         return prefix .. str .. filler_chunk .. closing_bracket
       end
+    return quote_long
+  end
+_G.package.preload['workshop.concepts.lua.quote_string.quote_char'] =
+  function(...)
+    local str_format = string.format
+    local str_byte = string.byte
+    local quote_char_fmt = [[\]] .. '%03d'
+    local quote_char =
+      function(char)
+        return str_format(quote_char_fmt, str_byte(char))
+      end
+    return quote_char
   end
 _G.package.preload['workshop.concepts.list.to_string'] =
   function(...)

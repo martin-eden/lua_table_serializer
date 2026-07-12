@@ -2,7 +2,7 @@
 
 --[[
   Author: Martin Eden
-  Last mod.: 2026-07-11
+  Last mod.: 2026-07-12
 ]]
 
 --[[
@@ -13,14 +13,16 @@
     {
       has_a [b] -- value A is present
       has_b [b] -- value B is present
-      action [s] -- string with one of following values
-        use_a -- keep value in A
-        use_b -- replace value in A
+      action [s] -- action to apply for item in A
+        keep -- keep value in A
+        replace -- replace value in A
+        remove -- remove value in A
     }
 ]]
 
-local use_a_str = 'use_a'
-local use_b_str = 'use_b'
+local keep_str = 'keep'
+local replace_str = 'replace'
+local remove_str = 'remove'
 
 --[[
   Return action name considering given inputs and set of rules
@@ -35,7 +37,7 @@ local get_action =
       end
     end
 
-    return use_a_str
+    return keep_str
   end
 
 -- Apply values to table A from table B following list of rules
@@ -57,10 +59,7 @@ apply_table =
       local a_key = A[key]
       local b_key = B[key]
 
-      local a_is_table = is_table(a_key)
-      local b_is_table = is_table(b_key)
-
-      if a_is_table and b_is_table then
+      if is_table(a_key) and is_table(b_key) then
         apply_table(a_key, b_key, Rules)
       else
         local has_a = not is_nil(a_key)
@@ -68,8 +67,12 @@ apply_table =
 
         local action = get_action(has_a, has_b, Rules)
 
-        if (action == use_b_str) then
+        if (action == keep_str) then
+          ;
+        elseif (action == replace_str) then
           A[key] = B[key]
+        elseif (action == remove_str) then
+          A[key] = nil
         end
       end
     end
@@ -82,7 +85,9 @@ local check_rule =
 
     local action = Rule.action
     local is_known_action =
-      (action == use_a_str) or (action == use_b_str)
+      (action == keep_str) or
+      (action == replace_str) or
+      (action == remove_str)
 
     return has_a and has_b and is_known_action
   end
@@ -92,6 +97,8 @@ local apply_table_root =
     assert_table(A)
     assert_table(B)
     assert_table(Rules)
+
+    assert(A ~= B)
 
     -- Assert rules
     for index, Rule in ipairs(Rules) do
@@ -109,4 +116,5 @@ return apply_table_root
 --[[
   2026-04-30
   2026-07-11
+  2026-07-12
 ]]

@@ -2,7 +2,7 @@
 
 --[[
   Author: Martin Eden
-  Last mod.: 2026-07-11
+  Last mod.: 2026-07-12
 ]]
 
 --[==[
@@ -25,9 +25,10 @@
     > s = [=[Hello!]=]
 ]==]
 
-local has_newlines = request('!.string.content_attributes').has_newlines
+local str_find = string.find
+local str_sub = string.sub
 
-return
+local quote_long =
   function(str)
     local opening_bracket = '['
     local closing_bracket = ']'
@@ -44,7 +45,7 @@ return
         local postfix =
           closing_bracket .. filler_chunk .. closing_bracket
 
-        if not string.find(str, postfix) then break end
+        if not str_find(str, postfix) then break end
 
         filler_chunk = filler_chunk .. filler_char
       end
@@ -53,7 +54,7 @@ return
     local prefix = opening_bracket .. filler_chunk .. opening_bracket
 
     -- (2)
-    local first_char = string.sub(str, 1, 1)
+    local first_char = str_sub(str, 1, 1)
     if
       (first_char == newline_char) or (first_char == return_char)
     then
@@ -61,12 +62,16 @@ return
     end
 
     -- (3)
-    if has_newlines(str) then
+    local has_newlines = not is_nil(str_find(str, newline_char))
+    if has_newlines then
       prefix = prefix .. newline_char
     end
 
     return prefix .. str .. filler_chunk .. closing_bracket
   end
+
+-- Export:
+return quote_long
 
 --[===[
   [1] Quoted result string will have following structure:
