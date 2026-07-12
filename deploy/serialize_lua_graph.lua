@@ -1007,13 +1007,13 @@ _G.package.preload['workshop.concepts.lua.quote_string.intact'] =
         local prefix =
           opening_bracket .. filler_chunk .. opening_bracket
         local first_char = str_sub(str, 1, 1)
-        if
+        local first_char_is_newline =
           (first_char == newline_char) or (first_char == return_char)
-        then
+        if first_char_is_newline then
           prefix = prefix .. first_char
         end
         local has_newlines = not is_nil(str_find(str, newline_char))
-        if has_newlines then
+        if has_newlines and not first_char_is_newline then
           prefix = prefix .. newline_char
         end
         return prefix .. str .. filler_chunk .. closing_bracket
