@@ -1,16 +1,23 @@
 [![DeepWiki][DeepWiki_Logo]][DeepWiki_Repo] (sometimes AI explains it better)
 
+| Created |  Updated   |  Size   | License |
+|:-------:|:----------:|:-------:|:-------:|
+| 2017-05 | 2026-08-21 | < 70 K  |  LGPL3  |
+
+
 ## What
 
-| Created | Updated |  Size   | License |
-|:-------:|:-------:|:-------:|:-------:|
-| 2017-05 | 2026-06 | < 50 K  |  LGPL3  |
-
-Serialize data in Lua table to string with Lua code that recreates
-this data.
+Function to serialize data in Lua table to string with Lua code
+that recreates this data.
 
 Lua tables can contain cross-references, so actually it's graph encoder
-to Lua code.
+to Lua source code.
+
+
+## Scope
+
+Primary objective is serialization graph to source code.
+Nice output is secondary objective.
 
 
 ## Usage scenarios
@@ -26,18 +33,33 @@ t2s = require('serialize_lua_graph')
 print(t2s(_G))
 ```
 
+
 ## Encoding options
 
-Options is optional table that can be passed as second argument
-to function. That's Lua table with values like `{ style = 'readable_short' }`.
-
-We'll demonstrate behavior on excerpt of `_G` table printout.
+Encoding options is optional table that can be passed as second argument.
 
 Serializer function supports three _encoding styles_: `minimal`,
-`readable_short` and `readable_long`.
+`readable_short` and `readable_long`. Encoding style governs whitespaces
+and determines general text layout. Style lives in `style` string field.
+
+Serializer function supports three _behavior flags_: `use_compact_indices`,
+`use_compact_sequences` and `omit_tail_delimiter`. Behavior flags
+govern optional lexical elements emission. They determine what
+syntax elements will be present. Behavior flags are boolean fields.
+
+Example:
+
+```lua
+local g2s = require('serialize_lua_graph')
+local Options = { style = 'readable_short', use_compact_sequences = false }
+local str = g2s(_G, Options)
+print(str)
+```
+
+We'll demonstrate their effects on excerpt of `_G` table printout.
 
 
-| `style`          | Output                                                          |
+| Style            | Output                                                          |
 |:-----------------|:----------------------------------------------------------------|
 | `minimal`        | `local T_1={bit32={arshift='function: 0x557703aab060',`         |
 | `readable_short` | `local T_1 = { bit32 = { arshift = 'function: 0x55da5d825060',` |
@@ -45,16 +67,15 @@ Serializer function supports three _encoding styles_: `minimal`,
 |                  | `  bit32 = {`                                                   |
 |                  | `    arshift = 'function: 0x5595744ae060',`                     |
 
-Serializer function supports three _behavior flags_:
 
-| Behavior flag             | Output                                           |
-|:--------------------------|:-------------------------------------------------|
-| `☑ use_compact_indices`   | `package = T_2,`                                 |
-| `☐ use_compact_indices`   | `['package'] = T_2,`                             |
-| `☑ use_compact_sequences` | `searchers = { 'function: 0x56089fbeba20'`       |
-| `☐ use_compact_sequences` | `searchers = { [1] = 'function: 0x5580fdeb8a20'` |
-| `☑ omit_tail_delimiter`   | `xpcall = 'function: 0x5612c12e1e90' }`          |
-| `☐ omit_tail_delimiter`   | `xpcall = 'function: 0x55b2598d9e90',  }`        |
+| Behavior flag           | Output                                           | Value |
+|:------------------------|:-------------------------------------------------|:-----:|
+| `use_compact_indices`   | `['package'] = T_2,`                             |   ☐   |
+|                         | `package = T_2,`                                 |   ☑   |
+| `use_compact_sequences` | `searchers = { [1] = 'function: 0x5580fdeb8a20'` |   ☐   |
+|                         | `searchers = { 'function: 0x56089fbeba20'`       |   ☑   |
+| `omit_tail_delimiter`   | `xpcall = 'function: 0x55b2598d9e90',  }`        |   ☐   |
+|                         | `xpcall = 'function: 0x5612c12e1e90' }`          |   ☑   |
 
 
 ## Requirements
@@ -77,7 +98,7 @@ Serializer function supports three _behavior flags_:
 ## Rebuild
 
   * Clone [`workshop`][workshop] repo
-  * Checkout it to date near `2026-07-06`
+  * Checkout it to date near "Updated" date from stats plate (at header of this Readme)
   * Modify `package.path` in [`builder/create_deploy.lua`][create_deploy]
     so it can find your cloned `workshop` repo
   * Run [`builder/rebuild.sh`][builder]
