@@ -1151,7 +1151,7 @@ _G.package.preload['workshop.concepts.codec_lua_graph.compile.get_ast'] =
       end
     local get_num_refs =
       function(NodeRec)
-        local Node = NodeRec.Node
+        local Node = NodeRec.node
         local Refs = NodeRec.refs
         local num_refs = 0
         for Parent, ParentKeys in pairs(Refs) do
