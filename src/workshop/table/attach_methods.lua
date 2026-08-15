@@ -2,7 +2,7 @@
 
 --[[
   Author: Martin Eden
-  Last mod.: 2026-07-05
+  Last mod.: 2026-08-28
 ]]
 
 --[[
@@ -22,7 +22,8 @@
   Also it explodes when external code will try to add new field.
 ]]
 
-local attach_methods =
+-- Export:
+return
   function(Object, Methods)
     assert_table(Object)
     assert_table(Methods)
@@ -33,17 +34,13 @@ local attach_methods =
 
         __newindex =
           function()
-            error('Table is locked for additions.')
+            error('Table is locked for additions/removals.')
           end,
       }
 
     setmetatable(Object, Metatable)
   end
 
--- Export:
-return attach_methods
-
 --[[
-  2026-05-02
-  2026-07-05
+  2026 # #
 ]]

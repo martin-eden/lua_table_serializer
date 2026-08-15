@@ -2,7 +2,7 @@
 
 --[[
   Author: Martin Eden
-  Last mod.: 2026-07-12
+  Last mod.: 2026-08-29
 ]]
 
 --[[
@@ -14,38 +14,44 @@
   amount of "="'s determined in situ.
 ]]
 
--- Imports:
-local QuoteChars = request('QuoteChars')
-local get_chars_count = request('!.string.get_chars_count')
-local ControlChars_Map = request('!.concepts.AsciiControlCodes_Map')
-local intersect_set = request('!.table.intersect')
-local is_empty_set = request('!.table.is_empty')
-local quote_variable = request('quote_string.intact')
-local quote_char_func = request('quote_string.quote_char')
+local newline_code = request('!.concepts.Ascii.Codes').newline
 
-local newline_code = QuoteChars.newline_code
+local BinaryEntitiesLengths_Map =
+  { [1] = true, [2] = true, [4] = true, [8] = true }
 
-local str_gsub = string.gsub
+local single_quote_code
+local double_quote_code
+local backslash_code
+local single_quote
+local double_quote
+local backslash
+do
+  local QuoteChars = request('QuoteChars')
+  single_quote_code = QuoteChars.single_quote_code
+  double_quote_code = QuoteChars.double_quote_code
+  backslash_code = QuoteChars.backslash_code
+  single_quote = QuoteChars.single_quote
+  double_quote = QuoteChars.double_quote
+  backslash = QuoteChars.backslash
+end
 
-local has_messy_control_chars =
-  function(UsedChars)
-    local MessyControlChars = new(ControlChars_Map)
+local has_messy_control_chars
+do
+  local is_control_code = request('!.concepts.Ascii.is_control_code')
 
-    -- We can handle code 10 (newline), so remove it from messy chars
-    MessyControlChars[newline_code] = nil
-
-    intersect_set(MessyControlChars, UsedChars)
-
-    return not is_empty_set(MessyControlChars)
-  end
+  has_messy_control_chars =
+    function(UsedChars)
+      for code in pairs(UsedChars) do
+        if is_control_code(code) and (code ~= newline_code) then
+          return true
+        end
+      end
+      return false
+    end
+end
 
 local determine_fixed_quote_char =
   function(UsedChars)
-    local single_quote_code = QuoteChars.single_quote_code
-    local double_quote_code = QuoteChars.double_quote_code
-    local single_quote = QuoteChars.single_quote
-    local double_quote = QuoteChars.double_quote
-
     local num_single_quotes = UsedChars[single_quote_code] or 0
     local num_double_quotes = UsedChars[double_quote_code] or 0
 
@@ -56,21 +62,13 @@ local determine_fixed_quote_char =
     end
   end
 
-local BinaryEntitiesLengths_Map =
-  {
-    [1 << 0] = true,
-    [1 << 1] = true,
-    [1 << 2] = true,
-    [1 << 3] = true,
-  }
+local get_chars_count = request('!.string.get_chars_count')
+local quote_variable = request('quote_string.intact')
+local quote_char_func = request('quote_string.quote_char')
+local str_gsub = string.gsub
 
-local quote_string =
+return
   function(str)
-    local single_quote_code = QuoteChars.single_quote_code
-    local double_quote_code = QuoteChars.double_quote_code
-    local backslash_code = QuoteChars.backslash_code
-    local backslash = QuoteChars.backslash
-
     local UsedChars_Map = get_chars_count(str)
 
     local str_has_messy_control_chars =
@@ -118,14 +116,9 @@ local quote_string =
     end
   end
 
--- Export:
-return quote_string
-
 --[[
   2016 #
   2017 #
   2024 #
-  2026 #
-  2026-07-11
-  2026-07-12
+  2026 # # #
 ]]

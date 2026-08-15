@@ -2,7 +2,7 @@
 
 --[[
   Author: Martin Eden
-  Last mod.: 2026-07-12
+  Last mod.: 2026-08-13
 ]]
 
 --[==[
@@ -25,17 +25,25 @@
     > s = [=[Hello!]=]
 ]==]
 
+local opening_bracket
+local closing_bracket
+local filler_char
+local newline_char
+local return_char
+do
+  local AsciiChars = request('!.concepts.Ascii.Chars')
+  opening_bracket = AsciiChars.opening_bracket
+  closing_bracket = AsciiChars.closing_bracket
+  filler_char = AsciiChars.equals
+  newline_char = AsciiChars.newline
+  return_char = AsciiChars.carriage_return
+end
+
 local str_find = string.find
 local str_sub = string.sub
 
-local quote_long =
+return
   function(str)
-    local opening_bracket = '['
-    local closing_bracket = ']'
-    local filler_char = '='
-    local newline_char = '\010'
-    local return_char = '\013'
-
     -- (1)
     str = str .. closing_bracket
 
@@ -70,9 +78,6 @@ local quote_long =
 
     return prefix .. str .. filler_chunk .. closing_bracket
   end
-
--- Export:
-return quote_long
 
 --[===[
   [1] Quoted result string will have following structure:
