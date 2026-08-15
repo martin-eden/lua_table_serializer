@@ -1,9 +1,9 @@
-_G.package.preload['serialize_lua_graph'] =
+package.preload['serialize_lua_graph'] =
   function(...)
     require('workshop.base')
     return request('!.convert.table_to_str')
   end
-_G.package.preload['workshop.base'] =
+package.preload['workshop.base'] =
   function(...)
     local split_name =
       function(qualified_name)
@@ -113,7 +113,7 @@ _G.package.preload['workshop.base'] =
       pop()
     end
   end
-_G.package.preload['workshop.system.install_is_functions'] =
+package.preload['workshop.system.install_is_functions'] =
   function(...)
     local TypeNames = request('!.concepts.lua.TypeNames')
     local NumberTypeNames = request('!.concepts.lua.NumberTypeNames')
@@ -145,7 +145,7 @@ _G.package.preload['workshop.system.install_is_functions'] =
       end
     return install_is_functions
   end
-_G.package.preload['workshop.system.install_assert_functions'] =
+package.preload['workshop.system.install_assert_functions'] =
   function(...)
     local TypeNames = request('!.concepts.lua.TypeNames')
     local NumberTypeNames = request('!.concepts.lua.NumberTypeNames')
@@ -174,7 +174,7 @@ _G.package.preload['workshop.system.install_assert_functions'] =
       end
     return install_assert_funcs
   end
-_G.package.preload['workshop.mechs.name_giver'] =
+package.preload['workshop.mechs.name_giver'] =
   function(...)
     local Interface =
       {
@@ -211,7 +211,7 @@ _G.package.preload['workshop.mechs.name_giver'] =
       }
     return Interface
   end
-_G.package.preload['workshop.mechs.graph.dfs'] =
+package.preload['workshop.mechs.graph.dfs'] =
   function(...)
     local dfs_class = request('dfs.interface')
     return
@@ -221,7 +221,7 @@ _G.package.preload['workshop.mechs.graph.dfs'] =
         return dfs.nodes_status
       end
   end
-_G.package.preload['workshop.mechs.graph.assembly_order'] =
+package.preload['workshop.mechs.graph.assembly_order'] =
   function(...)
     local dfs = request('dfs')
     return
@@ -236,7 +236,7 @@ _G.package.preload['workshop.mechs.graph.assembly_order'] =
         return node_recs, assembly_order_seq
       end
   end
-_G.package.preload['workshop.mechs.graph.dfs.get_children'] =
+package.preload['workshop.mechs.graph.dfs.get_children'] =
   function(...)
     local get_key_vals = request('!.table.get_key_vals')
     local compare_keys = request('!.table.ordered_pass.compare_keys')
@@ -258,7 +258,7 @@ _G.package.preload['workshop.mechs.graph.dfs.get_children'] =
       end
     return get_children
   end
-_G.package.preload['workshop.mechs.graph.dfs.dfs'] =
+package.preload['workshop.mechs.graph.dfs.dfs'] =
   function(...)
     return
       function(self, graph)
@@ -308,7 +308,7 @@ _G.package.preload['workshop.mechs.graph.dfs.dfs'] =
         dfs_visit(graph, 0)
       end
   end
-_G.package.preload['workshop.mechs.graph.dfs.interface'] =
+package.preload['workshop.mechs.graph.dfs.interface'] =
   function(...)
     local empty_func =
       function()
@@ -324,7 +324,7 @@ _G.package.preload['workshop.mechs.graph.dfs.interface'] =
         nodes_status = {},
       }
   end
-_G.package.preload['workshop.number.is_neg_inf'] =
+package.preload['workshop.number.is_neg_inf'] =
   function(...)
     local is_neg_inf =
       function(n)
@@ -332,7 +332,23 @@ _G.package.preload['workshop.number.is_neg_inf'] =
       end
     return is_neg_inf
   end
-_G.package.preload['workshop.number.is_pos_inf'] =
+package.preload['workshop.number.get_bits'] =
+  function(...)
+    local assert_bit_offs = request('assert_bit_offs')
+    local get_bits =
+      function(n, start_offs, end_offs)
+        assert_integer(n)
+        assert_bit_offs(start_offs)
+        assert_bit_offs(end_offs)
+        assert(start_offs <= end_offs)
+        local mask
+        mask = (1 << (end_offs + 1)) - 1
+        mask = mask & ~((1 << start_offs) - 1)
+        return (n & mask) >> start_offs
+      end
+    return get_bits
+  end
+package.preload['workshop.number.is_pos_inf'] =
   function(...)
     local is_pos_inf =
       function(n)
@@ -340,7 +356,7 @@ _G.package.preload['workshop.number.is_pos_inf'] =
       end
     return is_pos_inf
   end
-_G.package.preload['workshop.number.is_nan'] =
+package.preload['workshop.number.is_nan'] =
   function(...)
     local is_nan =
       function(n)
@@ -348,7 +364,35 @@ _G.package.preload['workshop.number.is_nan'] =
       end
     return is_nan
   end
-_G.package.preload['workshop.table.clone'] =
+package.preload['workshop.number.assert_byte'] =
+  function(...)
+    local is_byte = request('is_byte')
+    return
+      function(v)
+        assert(is_byte(v))
+      end
+  end
+package.preload['workshop.number.is_byte'] =
+  function(...)
+    local get_bits = request('get_bits')
+    local is_byte =
+      function(value)
+        if not is_integer(value) then
+          return false
+        end
+        return (value == get_bits(value, 0, 7))
+      end
+    return is_byte
+  end
+package.preload['workshop.number.assert_bit_offs'] =
+  function(...)
+    return
+      function(offs)
+        assert_integer(offs)
+        assert((offs >= 0) and (offs <= 63))
+      end
+  end
+package.preload['workshop.table.clone'] =
   function(...)
     local cloned = {}
     local clone
@@ -376,7 +420,7 @@ _G.package.preload['workshop.table.clone'] =
         return clone(node)
       end
   end
-_G.package.preload['workshop.table.new'] =
+package.preload['workshop.table.new'] =
   function(...)
     local clone = request('clone')
     local patch = request('patch')
@@ -390,7 +434,7 @@ _G.package.preload['workshop.table.new'] =
         return result
       end
   end
-_G.package.preload['workshop.table.patch'] =
+package.preload['workshop.table.patch'] =
   function(...)
     local apply_table = request('apply_table')
     local Rules = { { has_a = true, has_b = true, action = 'replace' } }
@@ -400,7 +444,19 @@ _G.package.preload['workshop.table.patch'] =
       end
     return patch
   end
-_G.package.preload['workshop.table.map_values'] =
+package.preload['workshop.table.invert'] =
+  function(...)
+    return
+      function(Table)
+        assert_table(Table)
+        local Result = {}
+        for Key, Value in pairs(Table) do
+          Result[Value] = Key
+        end
+        return Result
+      end
+  end
+package.preload['workshop.table.map_values'] =
   function(...)
     local map_values =
       function(List)
@@ -413,7 +469,7 @@ _G.package.preload['workshop.table.map_values'] =
       end
     return map_values
   end
-_G.package.preload['workshop.table.create_instance'] =
+package.preload['workshop.table.create_instance'] =
   function(...)
     local clone = request('clone')
     local attach_methods = request('attach_methods')
@@ -428,15 +484,7 @@ _G.package.preload['workshop.table.create_instance'] =
       end
     return create_instance
   end
-_G.package.preload['workshop.table.is_empty'] =
-  function(...)
-    return
-      function(t)
-        assert_table(t)
-        return is_nil(next(t))
-      end
-  end
-_G.package.preload['workshop.table.get_key_vals'] =
+package.preload['workshop.table.get_key_vals'] =
   function(...)
     return
       function(t)
@@ -448,7 +496,7 @@ _G.package.preload['workshop.table.get_key_vals'] =
         return result
       end
   end
-_G.package.preload['workshop.table.apply_table'] =
+package.preload['workshop.table.apply_table'] =
   function(...)
     local keep_str = 'keep'
     local replace_str = 'replace'
@@ -519,7 +567,7 @@ _G.package.preload['workshop.table.apply_table'] =
       end
     return apply_table_root
   end
-_G.package.preload['workshop.table.ordered_pass'] =
+package.preload['workshop.table.ordered_pass'] =
   function(...)
     local get_key_vals = request('get_key_vals')
     local compare_keys = request('ordered_pass.compare_keys')
@@ -542,22 +590,7 @@ _G.package.preload['workshop.table.ordered_pass'] =
       end
     return ordered_pass
   end
-_G.package.preload['workshop.table.intersect'] =
-  function(...)
-    local apply_table = request('apply_table')
-    local Rules =
-      {
-        { has_a = true, has_b = true, action = 'keep' },
-        { has_a = true, has_b = false, action = 'remove' },
-        { has_a = false, has_b = true, action = 'remove' },
-      }
-    local intersect_set =
-      function(A, B)
-        apply_table(A, B, Rules)
-      end
-    return intersect_set
-  end
-_G.package.preload['workshop.table.attach_methods'] =
+package.preload['workshop.table.attach_methods'] =
   function(...)
     local attach_methods =
       function(Object, Methods)
@@ -568,14 +601,14 @@ _G.package.preload['workshop.table.attach_methods'] =
             __index = Methods,
             __newindex =
               function()
-                error('Table is locked for additions.')
+                error('Table is locked for additions/removals.')
               end,
           }
         setmetatable(Object, Metatable)
       end
     return attach_methods
   end
-_G.package.preload['workshop.table.ordered_pass.compare_values'] =
+package.preload['workshop.table.ordered_pass.compare_values'] =
   function(...)
     local TypeRank_Map = { ['number'] = 1, ['string'] = 2, other = 3 }
     local ComparableTypes_Map = { ['number'] = true, ['string'] = true }
@@ -597,7 +630,7 @@ _G.package.preload['workshop.table.ordered_pass.compare_values'] =
       end
     return compare_values
   end
-_G.package.preload['workshop.table.ordered_pass.compare_keys'] =
+package.preload['workshop.table.ordered_pass.compare_keys'] =
   function(...)
     local compare_values = request('compare_values')
     local compare_keys =
@@ -606,7 +639,7 @@ _G.package.preload['workshop.table.ordered_pass.compare_keys'] =
       end
     return compare_keys
   end
-_G.package.preload['workshop.string.get_chars_count'] =
+package.preload['workshop.string.get_chars_count'] =
   function(...)
     local str_sub = string.sub
     local str_byte = string.byte
@@ -625,29 +658,21 @@ _G.package.preload['workshop.string.get_chars_count'] =
       end
     return get_chars_count
   end
-_G.package.preload['workshop.convert.table_to_str'] =
+package.preload['workshop.convert.table_to_str'] =
   function(...)
     local StringOutputStream =
       request('!.concepts.StreamIo.Output.String')
-    local graph_to_str = request('!.concepts.codec_lua_graph.compile')
+    local compile_graph =
+      request('!.concepts.codec_lua_graph.compile_graph')
     local table_to_str =
       function(Graph, Options)
         local StringStream = new(StringOutputStream)
-        graph_to_str(Graph, StringStream, Options)
+        compile_graph(Graph, StringStream, Options)
         return StringStream:GetString()
       end
     return table_to_str
   end
-_G.package.preload['workshop.concepts.AsciiControlCodes_Map'] =
-  function(...)
-    local ControlCodes_Map = {}
-    for code = 0, 31 do
-      ControlCodes_Map[code] = true
-    end
-    ControlCodes_Map[127] = true
-    return ControlCodes_Map
-  end
-_G.package.preload['workshop.concepts.Indent'] =
+package.preload['workshop.concepts.Indent'] =
   function(...)
     local create_instance = request('!.table.create_instance')
     local RangePoint = request('!.concepts.RangePoint')
@@ -693,7 +718,7 @@ _G.package.preload['workshop.concepts.Indent'] =
       }
     return Interface
   end
-_G.package.preload['workshop.concepts.RangePoint'] =
+package.preload['workshop.concepts.RangePoint'] =
   function(...)
     local create_instance = request('!.table.create_instance')
     local min = math.min
@@ -764,12 +789,12 @@ _G.package.preload['workshop.concepts.RangePoint'] =
       }
     return Interface
   end
-_G.package.preload['workshop.concepts.lua.NumberTypeNames'] =
+package.preload['workshop.concepts.lua.NumberTypeNames'] =
   function(...)
     local NumberTypeNames = { 'integer', 'float' }
     return NumberTypeNames
   end
-_G.package.preload['workshop.concepts.lua.TypeNames'] =
+package.preload['workshop.concepts.lua.TypeNames'] =
   function(...)
     local TypeNames =
       {
@@ -784,7 +809,7 @@ _G.package.preload['workshop.concepts.lua.TypeNames'] =
       }
     return TypeNames
   end
-_G.package.preload['workshop.concepts.lua.Keywords'] =
+package.preload['workshop.concepts.lua.Keywords'] =
   function(...)
     local Keywords =
       {
@@ -813,7 +838,7 @@ _G.package.preload['workshop.concepts.lua.Keywords'] =
       }
     return Keywords
   end
-_G.package.preload['workshop.concepts.lua.is_identifier'] =
+package.preload['workshop.concepts.lua.is_identifier'] =
   function(...)
     local Keywords_Map
     do
@@ -830,7 +855,7 @@ _G.package.preload['workshop.concepts.lua.is_identifier'] =
       end
     return is_identifier
   end
-_G.package.preload['workshop.concepts.lua.serialize_terminal_value'] =
+package.preload['workshop.concepts.lua.serialize_terminal_value'] =
   function(...)
     local is_nan = request('!.number.is_nan')
     local is_pos_inf = request('!.number.is_pos_inf')
@@ -876,50 +901,69 @@ _G.package.preload['workshop.concepts.lua.serialize_terminal_value'] =
       end
     return serialize_terminal_value
   end
-_G.package.preload['workshop.concepts.lua.QuoteChars'] =
+package.preload['workshop.concepts.lua.QuoteChars'] =
   function(...)
-    local str_char = string.char
-    local newline_code = 10
-    local single_quote_code = 39
-    local double_quote_code = 34
-    local backslash_code = 92
-    local QuoteChars =
-      {
-        newline_code = newline_code,
-        single_quote_code = single_quote_code,
-        double_quote_code = double_quote_code,
-        backslash_code = backslash_code,
-        newline = str_char(newline_code),
-        single_quote = str_char(single_quote_code),
-        double_quote = str_char(double_quote_code),
-        backslash = str_char(backslash_code),
-      }
+    local QuoteChars
+    do
+      local AsciiCodes = request('!.concepts.Ascii.Codes')
+      local AsciiChars = request('!.concepts.Ascii.Chars')
+      QuoteChars =
+        {
+          single_quote_code = AsciiCodes.single_quote,
+          double_quote_code = AsciiCodes.double_quote,
+          backslash_code = AsciiCodes.backslash,
+          single_quote = AsciiChars.single_quote,
+          double_quote = AsciiChars.double_quote,
+          backslash = AsciiChars.backslash,
+        }
+    end
     return QuoteChars
   end
-_G.package.preload['workshop.concepts.lua.quote_string'] =
+package.preload['workshop.concepts.lua.quote_string'] =
   function(...)
-    local QuoteChars = request('QuoteChars')
-    local get_chars_count = request('!.string.get_chars_count')
-    local ControlChars_Map = request('!.concepts.AsciiControlCodes_Map')
-    local intersect_set = request('!.table.intersect')
-    local is_empty_set = request('!.table.is_empty')
-    local quote_variable = request('quote_string.intact')
-    local quote_char_func = request('quote_string.quote_char')
-    local newline_code = QuoteChars.newline_code
-    local str_gsub = string.gsub
-    local has_messy_control_chars =
-      function(UsedChars)
-        local MessyControlChars = new(ControlChars_Map)
-        MessyControlChars[newline_code] = nil
-        intersect_set(MessyControlChars, UsedChars)
-        return not is_empty_set(MessyControlChars)
-      end
+    local newline_code
+    do
+      local AsciiCodes = request('!.concepts.Ascii.Codes')
+      newline_code = AsciiCodes.newline
+    end
+    local BinaryEntitiesLengths_Map =
+      {
+        [1 << 0] = true,
+        [1 << 1] = true,
+        [1 << 2] = true,
+        [1 << 3] = true,
+      }
+    local single_quote_code
+    local double_quote_code
+    local backslash_code
+    local single_quote
+    local double_quote
+    local backslash
+    do
+      local QuoteChars = request('QuoteChars')
+      single_quote_code = QuoteChars.single_quote_code
+      double_quote_code = QuoteChars.double_quote_code
+      backslash_code = QuoteChars.backslash_code
+      single_quote = QuoteChars.single_quote
+      double_quote = QuoteChars.double_quote
+      backslash = QuoteChars.backslash
+    end
+    local has_messy_control_chars
+    do
+      local is_control_code =
+        request('!.concepts.Ascii.is_control_code')
+      has_messy_control_chars =
+        function(UsedChars)
+          for code in pairs(UsedChars) do
+            if is_control_code(code) and (code ~= newline_code) then
+              return true
+            end
+          end
+          return false
+        end
+    end
     local determine_fixed_quote_char =
       function(UsedChars)
-        local single_quote_code = QuoteChars.single_quote_code
-        local double_quote_code = QuoteChars.double_quote_code
-        local single_quote = QuoteChars.single_quote
-        local double_quote = QuoteChars.double_quote
         local num_single_quotes = UsedChars[single_quote_code] or 0
         local num_double_quotes = UsedChars[double_quote_code] or 0
         if (num_single_quotes <= num_double_quotes) then
@@ -928,19 +972,12 @@ _G.package.preload['workshop.concepts.lua.quote_string'] =
           return double_quote
         end
       end
-    local BinaryEntitiesLengths_Map =
-      {
-        [1 << 0] = true,
-        [1 << 1] = true,
-        [1 << 2] = true,
-        [1 << 3] = true,
-      }
-    local quote_string =
+    local get_chars_count = request('!.string.get_chars_count')
+    local quote_variable = request('quote_string.intact')
+    local quote_char_func = request('quote_string.quote_char')
+    local str_gsub = string.gsub
+    return
       function(str)
-        local single_quote_code = QuoteChars.single_quote_code
-        local double_quote_code = QuoteChars.double_quote_code
-        local backslash_code = QuoteChars.backslash_code
-        local backslash = QuoteChars.backslash
         local UsedChars_Map = get_chars_count(str)
         local str_has_messy_control_chars =
           has_messy_control_chars(UsedChars_Map)
@@ -979,19 +1016,26 @@ _G.package.preload['workshop.concepts.lua.quote_string'] =
           return quote_char .. str .. quote_char
         end
       end
-    return quote_string
   end
-_G.package.preload['workshop.concepts.lua.quote_string.intact'] =
+package.preload['workshop.concepts.lua.quote_string.intact'] =
   function(...)
+    local opening_bracket
+    local closing_bracket
+    local filler_char
+    local newline_char
+    local return_char
+    do
+      local AsciiChars = request('!.concepts.Ascii.Chars')
+      opening_bracket = AsciiChars.opening_bracket
+      closing_bracket = AsciiChars.closing_bracket
+      filler_char = AsciiChars.equals
+      newline_char = AsciiChars.newline
+      return_char = AsciiChars.carriage_return
+    end
     local str_find = string.find
     local str_sub = string.sub
-    local quote_long =
+    return
       function(str)
-        local opening_bracket = '['
-        local closing_bracket = ']'
-        local filler_char = '='
-        local newline_char = '\010'
-        local return_char = '\013'
         str = str .. closing_bracket
         local filler_chunk = ''
         do
@@ -1018,20 +1062,18 @@ _G.package.preload['workshop.concepts.lua.quote_string.intact'] =
         end
         return prefix .. str .. filler_chunk .. closing_bracket
       end
-    return quote_long
   end
-_G.package.preload['workshop.concepts.lua.quote_string.quote_char'] =
+package.preload['workshop.concepts.lua.quote_string.quote_char'] =
   function(...)
-    local str_format = string.format
+    local quote_char_fmt = [[\%03d]]
     local str_byte = string.byte
-    local quote_char_fmt = [[\]] .. '%03d'
-    local quote_char =
+    local str_format = string.format
+    return
       function(char)
         return str_format(quote_char_fmt, str_byte(char))
       end
-    return quote_char
   end
-_G.package.preload['workshop.concepts.list.to_string'] =
+package.preload['workshop.concepts.list.to_string'] =
   function(...)
     local to_string =
       function(List, separator_str)
@@ -1042,7 +1084,7 @@ _G.package.preload['workshop.concepts.list.to_string'] =
       end
     return to_string
   end
-_G.package.preload['workshop.concepts.list.add_item'] =
+package.preload['workshop.concepts.list.add_item'] =
   function(...)
     local add_item =
       function(OurList, item)
@@ -1050,381 +1092,799 @@ _G.package.preload['workshop.concepts.list.add_item'] =
       end
     return add_item
   end
-_G.package.preload['workshop.concepts.codec_lua_graph.compile'] =
+package.preload['workshop.concepts.codec_lua_graph.compile_graph'] =
   function(...)
-    local ordered_pass = request('!.table.ordered_pass')
-    local get_ast = request('compile.get_ast')
-    local GraphSerializer = request('compile.GraphSerializer')
-    local formatter_minimal = request('compile.Formatters.minimal')
-    local formatter_readable_short =
-      request('compile.Formatters.readable_short')
-    local formatter_readable_long =
-      request('compile.Formatters.readable_long')
-    local set_style =
-      function(style_str, GraphSerializer)
-        local Formaters_Map =
-          {
-            ['minimal'] = formatter_minimal,
-            ['readable_short'] = formatter_readable_short,
-            ['readable_long'] = formatter_readable_long,
-          }
-        local formatter = Formaters_Map[style_str]
-        if not is_function(formatter) then
-          error('No formatter for given style.')
-        end
-        formatter(GraphSerializer.Config)
-      end
-    local original_stream_write
-    local last_char = ''
-    local write_avoiding_syntax_clash =
-      function(Output, str)
-        local next_char = string.sub(str, 1, 1)
-        if (last_char == '[') and (next_char == '[') then
-          original_stream_write(Output, ' ')
-        end
-        original_stream_write(Output, str)
-        last_char = string.sub(str, -1)
-      end
-    local DefaultOptions =
-      { style = 'readable_long', table_iterator = ordered_pass }
-    local set_field =
-      function(BaseTable, OptTable, field_name)
-        if not is_table(OptTable) then
-          return
-        end
-        if is_nil(OptTable[field_name]) then
-          return
-        end
-        BaseTable[field_name] = OptTable[field_name]
-      end
-    local compile =
-      function(Graph, Output, ArgOptions)
+    local wrap_output
+    local unwrap_output
+    local configure_style
+    do
+      local Initializer = request('compile.Initializer')
+      wrap_output = Initializer.wrap_output
+      unwrap_output = Initializer.unwrap_output
+      configure_style = Initializer.configure_style
+    end
+    local get_ast = request('compile.get_graph_ast')
+    local serialize_ast = request('compile.serialize_graph_ast')
+    local compile_graph =
+      function(Graph, Output, Options)
         assert_table(Graph)
-        local Options = new(DefaultOptions, ArgOptions)
-        local style = Options.style
-        local table_iterator = Options.table_iterator
-        local Ast = get_ast(Graph, table_iterator)
-        original_stream_write = Output.Write
-        Output.Write = write_avoiding_syntax_clash
+        Options = Options or {}
+        local original_write = wrap_output(Output)
         do
-          local GraphSerializer = new(GraphSerializer)
-          local Config = GraphSerializer.Config
-          Config.Output = Output
-          set_style(style, GraphSerializer)
-          set_field(Config, ArgOptions, 'use_compact_indices')
-          set_field(Config, ArgOptions, 'use_compact_sequences')
-          set_field(Config, ArgOptions, 'omit_tail_delimiter')
-          GraphSerializer:SerializeGraph(Ast, Output)
+          local Settings = {}
+          configure_style(Settings, Output, Options)
+          serialize_ast(Settings, get_ast(Graph))
         end
-        Output.Write = original_stream_write
+        unwrap_output(Output, original_write)
       end
-    return compile
+    return compile_graph
   end
-_G.package.preload['workshop.concepts.codec_lua_graph.compile.get_ast'] =
+package.preload[
+  'workshop.concepts.codec_lua_graph.compile.serialize_tree_ast'
+] =
   function(...)
-    local NameGiver = request('!.mechs.name_giver')
-    local get_assembly_order = request('!.mechs.graph.assembly_order')
-    local add_to_list = request('!.concepts.list.add_item')
-    local create_name_rec =
-      function(name)
-        return { 'name', name }
+    local type_name
+    local type_table
+    local type_number
+    local type_string
+    do
+      local TypeNames = request('Ast.TypeNames')
+      type_name = TypeNames.type_name
+      type_table = TypeNames.type_table
+      type_number = TypeNames.type_number
+      type_string = TypeNames.type_string
+    end
+    local serialize_value
+    local serialize_tree
+    do
+      local serialize_terminal_value =
+        request('!.concepts.lua.serialize_terminal_value')
+      serialize_value =
+        function(Settings, Ast)
+          local Output = Settings.Output
+          local type = Ast[1]
+          local value = Ast[2]
+          if (type == type_name) then
+            Output:Write(value)
+          elseif (type == type_table) then
+            serialize_tree(Settings, Ast)
+          else
+            local val_str = serialize_terminal_value(value)
+            if is_nil(val_str) then
+              val_str = serialize_terminal_value(tostring(value))
+            end
+            Output:Write(val_str)
+          end
+        end
+    end
+    do
+      local is_identifier = request('!.concepts.lua.is_identifier')
+      serialize_tree =
+        function(Settings, TableAst)
+          local Output = Settings.Output
+          local Write = Settings.Writer
+          local use_compact_sequences = Settings.use_compact_sequences
+          local use_compact_indices = Settings.use_compact_indices
+          local omit_tail_delimiter = Settings.omit_tail_delimiter
+          local notify = Settings.notify
+          local KeyVals = TableAst[2]
+          if (#KeyVals == 0) then
+            Write:EmptyTable()
+            return
+          end
+          notify('start_table', Output)
+          Write:StartTable()
+          local last_integer_key = 0
+          for index, KeyVal_Rec in ipairs(KeyVals) do
+            local is_first_rec = (index == 1)
+            if not is_first_rec then
+              notify('items_delimiter', Output)
+              Write:SeparateItem()
+            end
+            notify('processing_item', Output)
+            local Key = KeyVal_Rec[1]
+            local Value = KeyVal_Rec[2]
+            local key_type = Key[1]
+            local key_value = Key[2]
+            local brackets_not_required
+            local skip_key_serialization =
+              use_compact_sequences and
+              (
+                (key_type == type_number) and
+                (key_value == last_integer_key + 1)
+              )
+            if skip_key_serialization then
+              last_integer_key = key_value
+              goto serialize_value
+            end
+            brackets_not_required =
+              use_compact_indices and
+              ((key_type == type_string) and is_identifier(key_value))
+            if brackets_not_required then
+              Output:Write(key_value)
+            else
+              Write:StartIndex()
+              serialize_value(Settings, Key)
+              Write:EndIndex()
+            end
+            Write:Assign()
+            ::serialize_value::
+            serialize_value(Settings, Value)
+          end
+          if not omit_tail_delimiter then
+            notify('items_delimiter', Output)
+            Write:SeparateItem()
+          end
+          notify('end_table', Output)
+          Write:EndTable()
+        end
+    end
+    return serialize_value
+  end
+package.preload['workshop.concepts.codec_lua_graph.compile.Initializer'] =
+  function(...)
+    local configure_style
+    do
+      local KnownStyles =
+        {
+          [1] = 'minimal',
+          [2] = 'readable_short',
+          [3] = 'readable_long',
+        }
+      local default_style = KnownStyles[3]
+      local Styles
+      do
+        local invert_table = request('!.table.invert')
+        Styles = invert_table(KnownStyles)
       end
+      local KnownBehaviors =
+        {
+          [1] = 'use_compact_indices',
+          [2] = 'use_compact_sequences',
+          [3] = 'omit_tail_delimiter',
+        }
+      local Behaviors
+      do
+        local invert_table = request('!.table.invert')
+        Behaviors = invert_table(KnownBehaviors)
+      end
+      local StyleToBehavior =
+        {
+          [Styles.minimal] =
+            {
+              [Behaviors.use_compact_indices] = true,
+              [Behaviors.use_compact_sequences] = true,
+              [Behaviors.omit_tail_delimiter] = true,
+            },
+          [Styles.readable_short] =
+            {
+              [Behaviors.use_compact_indices] = true,
+              [Behaviors.use_compact_sequences] = true,
+              [Behaviors.omit_tail_delimiter] = true,
+            },
+          [Styles.readable_long] =
+            {
+              [Behaviors.use_compact_indices] = true,
+              [Behaviors.use_compact_sequences] = false,
+              [Behaviors.omit_tail_delimiter] = false,
+            },
+        }
+      local Writers_Map =
+        {
+          [Styles.minimal] = request('Writers.Minimal'),
+          [Styles.readable_short] = request('Writers.Readable_Short'),
+          [Styles.readable_long] = request('Writers.Readable_Long'),
+        }
+      local Notify_Map
+      do
+        local notify_default =
+          function(event_name, Output)
+          end
+        Notify_Map =
+          {
+            [Styles.minimal] = notify_default,
+            [Styles.readable_short] = notify_default,
+            [Styles.readable_long] = request('Formatters.readable_long'),
+          }
+      end
+      configure_style =
+        function(Settings, Output, Options)
+          assert_table(Options)
+          local style_idx
+          do
+            local style_str = Options.style or default_style
+            style_idx = Styles[style_str]
+          end
+          if not style_idx then
+            error('Unknown style.')
+          end
+          local Writer_Module = Writers_Map[style_idx]
+          Settings.Output = Output
+          Settings.Writer = Writer_Module.create(Output)
+          do
+            local Behavior = StyleToBehavior[style_idx]
+            for behavior_idx, flag_value in ipairs(Behavior) do
+              Settings[KnownBehaviors[behavior_idx]] = flag_value
+            end
+          end
+          for
+            behavior_idx, behavior_flag_name in ipairs(KnownBehaviors)
+          do
+            if is_boolean(Options[behavior_flag_name]) then
+              Settings[behavior_flag_name] = Options[behavior_flag_name]
+            end
+          end
+          Settings.notify = Notify_Map[style_idx]
+        end
+    end
+    local wrap_output =
+      function(Output)
+        local original_write
+        local wrapped_write
+        do
+          local opening_bracket
+          local space
+          do
+            local Ascii = request('!.concepts.Ascii.Chars')
+            opening_bracket = Ascii.opening_bracket
+            space = Ascii.space
+          end
+          local str_sub = string.sub
+          local last_char = ''
+          wrapped_write =
+            function(Output, str)
+              local next_char = str_sub(str, 1, 1)
+              if
+                (last_char == opening_bracket) and
+                (next_char == opening_bracket)
+              then
+                original_write(Output, space)
+              end
+              original_write(Output, str)
+              last_char = str_sub(str, -1)
+            end
+        end
+        original_write = Output.Write
+        Output.Write = wrapped_write
+        return original_write
+      end
+    local unwrap_output =
+      function(Output, original_write)
+        Output.Write = original_write
+      end
+    local Interface =
+      {
+        configure_style = configure_style,
+        wrap_output = wrap_output,
+        unwrap_output = unwrap_output,
+      }
+    return Interface
+  end
+package.preload[
+  'workshop.concepts.codec_lua_graph.compile.get_graph_ast'
+] =
+  function(...)
+    local get_graph_ast
+    do
+      local get_tree_ast = request('get_tree_ast')
+      local create_table_rec
+      local create_name_rec
+      local create_local_def_rec
+      local create_assignment_rec
+      local create_return_rec
+      do
+        local Methods = request('Ast.Methods')
+        create_table_rec = Methods.create_table_rec
+        create_name_rec = Methods.create_name_rec
+        create_local_def_rec = Methods.create_local_def_rec
+        create_assignment_rec = Methods.create_assignment_rec
+        create_return_rec = Methods.create_return_rec
+      end
+      local may_print_inline
+      do
+        local get_num_refs =
+          function(NodeRec)
+            local Node = NodeRec.node
+            local Refs = NodeRec.refs
+            local num_refs = 0
+            for Parent, ParentKeys in pairs(Refs) do
+              if (Parent == Node) then
+                num_refs = num_refs + 1
+              end
+              for Key in pairs(ParentKeys) do
+                if (Key == Node) then
+                  num_refs = num_refs + 1
+                end
+                if (Parent[Key] == Node) then
+                  num_refs = num_refs + 1
+                end
+              end
+            end
+            return num_refs
+          end
+        may_print_inline =
+          function(NodeRec)
+            if not NodeRec then
+              return true
+            end
+            return
+              (
+                (get_num_refs(NodeRec) <= 1) and
+                not NodeRec.part_of_cycle
+              )
+          end
+      end
+      local table_iterator = request('!.table.ordered_pass')
+      local get_assembly_order = request('!.mechs.graph.assembly_order')
+      local NameGiver = request('!.mechs.name_giver')
+      local add_to_list = request('!.concepts.list.add_item')
+      local tbl_remove = table.remove
+      get_graph_ast =
+        function(Root)
+          local NamedValues = {}
+          local NameGiver = new(NameGiver)
+          local NodeRecs, OrderedNodes =
+            get_assembly_order(
+              Root,
+              {
+                also_visit_keys = true,
+                table_iterator = table_iterator,
+              }
+            )
+          local Result = {}
+          local ProcessedTables = {}
+          for _, Node in ipairs(OrderedNodes) do
+            local NodeRec = NodeRecs[Node]
+            if (Node == Root) or not may_print_inline(NodeRec) then
+              local TableRec
+              if NodeRec.part_of_cycle then
+                TableRec = create_table_rec()
+                local KeyVals = TableRec[2]
+                for k, v in table_iterator(Node) do
+                  local key_is_ok =
+                    not is_table(k) or ProcessedTables[k]
+                  local value_is_ok =
+                    not is_table(v) or ProcessedTables[v]
+                  if not (key_is_ok and value_is_ok) then
+                    goto next
+                  end
+                  add_to_list(
+                    KeyVals,
+                    {
+                      get_tree_ast(k, NamedValues),
+                      get_tree_ast(v, NamedValues),
+                    }
+                  )
+                  ::next::
+                end
+              else
+                TableRec = get_tree_ast(Node, NamedValues)
+              end
+              local node_name = NameGiver:give_name(Node)
+              NamedValues[Node] = node_name
+              add_to_list(
+                Result, create_local_def_rec(node_name, TableRec)
+              )
+            end
+            ProcessedTables[Node] = true
+            if NodeRec.part_of_cycle then
+              for Parent, ParentKeys in pairs(NodeRec.refs) do
+                if ProcessedTables[Parent] then
+                  for parent_key in pairs(ParentKeys) do
+                    local key_slot =
+                      get_tree_ast(parent_key, NamedValues)
+                    add_to_list(
+                      Result,
+                      create_assignment_rec(
+                        NamedValues[Parent], key_slot, NamedValues[Node]
+                      )
+                    )
+                  end
+                end
+              end
+            end
+          end
+          add_to_list(
+            Result,
+            create_return_rec(create_name_rec(NamedValues[Root]))
+          )
+          do
+            local PrelastNode = Result[#Result - 1]
+            local prelast_type = PrelastNode[1]
+            if (prelast_type == 'local_definition') then
+              local prelast_value = PrelastNode[3]
+              tbl_remove(Result)
+              tbl_remove(Result)
+              add_to_list(Result, create_return_rec(prelast_value))
+            end
+          end
+          return Result
+        end
+    end
+    return get_graph_ast
+  end
+package.preload[
+  'workshop.concepts.codec_lua_graph.compile.serialize_graph_ast'
+] =
+  function(...)
+    local serialize_graph
+    do
+      local type_local
+      local type_assignment
+      local type_return
+      local type_string
+      do
+        local TypeNames = request('Ast.TypeNames')
+        type_local = TypeNames.type_local
+        type_assignment = TypeNames.type_assignment
+        type_return = TypeNames.type_return
+        type_string = TypeNames.type_string
+      end
+      local serialize_value = request('serialize_tree_ast')
+      local is_identifier = request('!.concepts.lua.is_identifier')
+      serialize_graph =
+        function(Settings, GraphAst)
+          local Output = Settings.Output
+          local Write = Settings.Writer
+          local use_compact_indices = Settings.use_compact_indices
+          for index, Rec in ipairs(GraphAst) do
+            local rec_type = Rec[1]
+            if (rec_type == type_local) then
+              local name = Rec[2]
+              local Value = Rec[3]
+              Write:Keyword_Local()
+              Output:Write(name)
+              Write:Assign()
+              serialize_value(Settings, Value)
+              Write:EndStatement()
+            elseif (rec_type == type_assignment) then
+              local dest_name = Rec[2]
+              local Key = Rec[3]
+              local src_name = Rec[4]
+              local key_type = Key[1]
+              local key_value = Key[2]
+              local brackets_not_required =
+                use_compact_indices and
+                ((key_type == type_string) and is_identifier(key_value))
+              Output:Write(dest_name)
+              if brackets_not_required then
+                Write:SeparateName()
+                Output:Write(key_value)
+              else
+                Write:StartIndex()
+                serialize_value(Settings, Key)
+                Write:EndIndex()
+              end
+              Write:Assign()
+              Output:Write(src_name)
+              Write:EndStatement()
+            elseif (rec_type == type_return) then
+              local Value = Rec[2]
+              Write:Keyword_Return()
+              serialize_value(Settings, Value)
+              Write:EndStatement()
+            end
+          end
+        end
+    end
+    return serialize_graph
+  end
+package.preload[
+  'workshop.concepts.codec_lua_graph.compile.get_tree_ast'
+] =
+  function(...)
+    local get_tree_ast
+    do
+      local create_name_rec
+      local create_terminal_type_rec
+      local create_table_rec
+      do
+        local Methods = request('Ast.Methods')
+        create_name_rec = Methods.create_name_rec
+        create_terminal_type_rec = Methods.create_terminal_type_rec
+        create_table_rec = Methods.create_table_rec
+      end
+      local table_iterator = request('!.table.ordered_pass')
+      local add_to_list = request('!.concepts.list.add_item')
+      get_tree_ast =
+        function(Data, NamedValues)
+          NamedValues = NamedValues or {}
+          if NamedValues[Data] then
+            return create_name_rec(NamedValues[Data])
+          end
+          if not is_table(Data) then
+            return create_terminal_type_rec(Data)
+          end
+          local Result = create_table_rec()
+          local KeyVals = Result[2]
+          for Key, Value in table_iterator(Data) do
+            add_to_list(
+              KeyVals,
+              {
+                get_tree_ast(Key, NamedValues),
+                get_tree_ast(Value, NamedValues),
+              }
+            )
+          end
+          return Result
+        end
+    end
+    return get_tree_ast
+  end
+package.preload[
+  'workshop.concepts.codec_lua_graph.compile.Writers.Readable_Long'
+] =
+  function(...)
+    local Assign =
+      function(Me)
+        Me:Write(' = ')
+      end
+    local EmptyTable =
+      function(Me)
+        Me:Write('{ }')
+      end
+    local Interface
+    local create =
+      function(OutputStream)
+        return Interface.internal_create(OutputStream, Interface)
+      end
+    do
+      local BaseInterface = request('Minimal')
+      local patch = request('!.table.patch')
+      Interface = new(BaseInterface)
+      patch(
+        Interface,
+        { create = create, Assign = Assign, EmptyTable = EmptyTable }
+      )
+    end
+    return Interface
+  end
+package.preload[
+  'workshop.concepts.codec_lua_graph.compile.Writers.Minimal'
+] =
+  function(...)
+    local space = ' '
+    local newline = '\n'
+    local Keyword_Local =
+      function(Stream)
+        Stream:Write('local' .. space)
+      end
+    local Keyword_Return =
+      function(Stream)
+        Stream:Write('return' .. space)
+      end
+    local EndStatement =
+      function(Stream)
+        Stream:Write(newline)
+      end
+    local SeparateName =
+      function(Stream)
+        Stream:Write('.')
+      end
+    local Assign =
+      function(Stream)
+        Stream:Write('=')
+      end
+    local SeparateItem =
+      function(Stream)
+        Stream:Write(',')
+      end
+    local StartTable =
+      function(Stream)
+        Stream:Write('{')
+      end
+    local EndTable =
+      function(Stream)
+        Stream:Write('}')
+      end
+    local EmptyTable =
+      function(Stream)
+        Stream:Write('{}')
+      end
+    local StartIndex =
+      function(Stream)
+        Stream:Write('[')
+      end
+    local EndIndex =
+      function(Stream)
+        Stream:Write(']')
+      end
+    local Interface
+    local create =
+      function(OutputStream)
+        return Interface.internal_create(OutputStream, Interface)
+      end
+    do
+      local BaseInterface = request('Interface')
+      local patch = request('!.table.patch')
+      Interface = new(BaseInterface)
+      patch(
+        Interface,
+        {
+          create = create,
+          Keyword_Local = Keyword_Local,
+          SeparateName = SeparateName,
+          EndStatement = EndStatement,
+          Keyword_Return = Keyword_Return,
+          Assign = Assign,
+          SeparateItem = SeparateItem,
+          StartTable = StartTable,
+          EndTable = EndTable,
+          EmptyTable = EmptyTable,
+          StartIndex = StartIndex,
+          EndIndex = EndIndex,
+        }
+      )
+    end
+    return Interface
+  end
+package.preload[
+  'workshop.concepts.codec_lua_graph.compile.Writers.Readable_Short'
+] =
+  function(...)
+    local Assign =
+      function(Me)
+        Me:Write(' = ')
+      end
+    local SeparateItem =
+      function(Me)
+        Me:Write(', ')
+      end
+    local StartTable =
+      function(Me)
+        Me:Write('{ ')
+      end
+    local EndTable =
+      function(Me)
+        Me:Write(' }')
+      end
+    local EmptyTable =
+      function(Me)
+        Me:Write('{ }')
+      end
+    local Interface
+    local create =
+      function(OutputStream)
+        return Interface.internal_create(OutputStream, Interface)
+      end
+    do
+      local BaseInterface = request('Minimal')
+      local patch = request('!.table.patch')
+      Interface = new(BaseInterface)
+      patch(
+        Interface,
+        {
+          create = create,
+          Assign = Assign,
+          SeparateItem = SeparateItem,
+          StartTable = StartTable,
+          EndTable = EndTable,
+          EmptyTable = EmptyTable,
+        }
+      )
+    end
+    return Interface
+  end
+package.preload[
+  'workshop.concepts.codec_lua_graph.compile.Writers.Interface'
+] =
+  function(...)
+    local internal_create
+    do
+      local attach_methods = request('!.table.attach_methods')
+      internal_create =
+        function(OutputStream, Interface)
+          local State = { OutputStream }
+          attach_methods(State, Interface)
+          return State
+        end
+    end
+    local get_output_stream =
+      function(Me)
+        return Me[1]
+      end
+    local write =
+      function(Me, str)
+        get_output_stream(Me):Write(str)
+      end
+    local writer_method =
+      function(Me)
+      end
+    local Interface
+    local create =
+      function(OutputStream)
+        return internal_create(OutputStream, Interface)
+      end
+    Interface =
+      {
+        internal_create = internal_create,
+        Write = write,
+        create = create,
+        Keyword_Local = writer_method,
+        SeparateName = writer_method,
+        EndStatement = writer_method,
+        Keyword_Return = writer_method,
+        Assign = writer_method,
+        SeparateItem = writer_method,
+        StartTable = writer_method,
+        EndTable = writer_method,
+        EmptyTable = writer_method,
+        StartIndex = writer_method,
+        EndIndex = writer_method,
+      }
+    return Interface
+  end
+package.preload[
+  'workshop.concepts.codec_lua_graph.compile.Ast.TypeNames'
+] =
+  function(...)
+    local TypeNames =
+      {
+        type_name = 'name',
+        type_number = 'number',
+        type_string = 'string',
+        type_table = 'table',
+        type_local = 'definition',
+        type_assignment = 'assignment',
+        type_return = 'emit',
+      }
+    return TypeNames
+  end
+package.preload['workshop.concepts.codec_lua_graph.compile.Ast.Methods'] =
+  function(...)
+    local type_name
+    local type_table
+    local type_local
+    local type_assignment
+    local type_return
+    do
+      local TypeNames = request('TypeNames')
+      type_name = TypeNames.type_name
+      type_table = TypeNames.type_table
+      type_local = TypeNames.type_local
+      type_assignment = TypeNames.type_assignment
+      type_return = TypeNames.type_return
+    end
     local create_terminal_type_rec =
       function(data)
         return { type(data), data }
       end
+    local create_name_rec =
+      function(name)
+        return { type_name, name }
+      end
     local create_table_rec =
       function()
-        return { 'table', {} }
+        return { type_table, {} }
       end
     local create_local_def_rec =
       function(name, Value)
-        return { 'local_definition', name, Value }
+        return { type_local, name, Value }
       end
     local create_assignment_rec =
       function(dest, index, value)
-        return { 'key_assignment', dest, index, value }
+        return { type_assignment, dest, index, value }
       end
     local create_return_rec =
       function(Value)
-        return { 'return_statement', Value }
+        return { type_return, Value }
       end
-    local get_num_refs =
-      function(NodeRec)
-        local Node = NodeRec.node
-        local Refs = NodeRec.refs
-        local num_refs = 0
-        for Parent, ParentKeys in pairs(Refs) do
-          if (Parent == Node) then
-            num_refs = num_refs + 1
-          end
-          for Key in pairs(ParentKeys) do
-            if (Key == Node) then
-              num_refs = num_refs + 1
-            end
-            if (Parent[Key] == Node) then
-              num_refs = num_refs + 1
-            end
-          end
-        end
-        return num_refs
-      end
-    local may_print_inline =
-      function(NodeRec)
-        if not NodeRec then
-          return true
-        end
-        return
-          ((get_num_refs(NodeRec) <= 1) and not NodeRec.part_of_cycle)
-      end
-    local get_ast =
-      function(Root, table_iterator)
-        local NamedValues = {}
-        local get_tree_ast
-        get_tree_ast =
-          function(Data)
-            if NamedValues[Data] then
-              return create_name_rec(NamedValues[Data])
-            end
-            if not is_table(Data) then
-              return create_terminal_type_rec(Data)
-            end
-            local Result = create_table_rec()
-            local KeyVals = Result[2]
-            for Key, Value in table_iterator(Data) do
-              add_to_list(
-                KeyVals, { get_tree_ast(Key), get_tree_ast(Value) }
-              )
-            end
-            return Result
-          end
-        local NameGiver = new(NameGiver)
-        local NodeRecs, OrderedNodes =
-          get_assembly_order(
-            Root,
-            { also_visit_keys = true, table_iterator = table_iterator }
-          )
-        local Result = {}
-        local ProcessedTables = {}
-        for _, Node in ipairs(OrderedNodes) do
-          local NodeRec = NodeRecs[Node]
-          if (Node == Root) or not may_print_inline(NodeRec) then
-            local TableRec
-            if NodeRec.part_of_cycle then
-              TableRec = create_table_rec()
-              local KeyVals = TableRec[2]
-              for k, v in table_iterator(Node) do
-                local key_is_ok = not is_table(k) or ProcessedTables[k]
-                local value_is_ok =
-                  not is_table(v) or ProcessedTables[v]
-                if not (key_is_ok and value_is_ok) then
-                  goto next
-                end
-                add_to_list(
-                  KeyVals, { get_tree_ast(k), get_tree_ast(v) }
-                )
-                ::next::
-              end
-            else
-              TableRec = get_tree_ast(Node)
-            end
-            local node_name = NameGiver:give_name(Node)
-            NamedValues[Node] = node_name
-            add_to_list(
-              Result, create_local_def_rec(node_name, TableRec)
-            )
-          end
-          ProcessedTables[Node] = true
-          if NodeRec.part_of_cycle then
-            for Parent, ParentKeys in pairs(NodeRec.refs) do
-              if ProcessedTables[Parent] then
-                for parent_key in pairs(ParentKeys) do
-                  local key_slot = get_tree_ast(parent_key)
-                  add_to_list(
-                    Result,
-                    create_assignment_rec(
-                      NamedValues[Parent], key_slot, NamedValues[Node]
-                    )
-                  )
-                end
-              end
-            end
-          end
-        end
-        add_to_list(
-          Result, create_return_rec(create_name_rec(NamedValues[Root]))
-        )
-        local PrelastNode = Result[#Result - 1]
-        local prelast_type = PrelastNode[1]
-        if (prelast_type == 'local_definition') then
-          local prelast_value = PrelastNode[3]
-          table.remove(Result)
-          table.remove(Result)
-          add_to_list(Result, create_return_rec(prelast_value))
-        end
-        return Result
-      end
-    return get_ast
-  end
-_G.package.preload[
-  'workshop.concepts.codec_lua_graph.compile.GraphSerializer'
-] =
-  function(...)
-    local serialize_terminal_value =
-      request('!.concepts.lua.serialize_terminal_value')
-    local is_identifier = request('!.concepts.lua.is_identifier')
-    local SerializeValue =
-      function(Me, Node, Output)
-        local node_type = Node[1]
-        local node_value = Node[2]
-        if (node_type == 'name') then
-          Output:Write(node_value)
-        elseif (node_type == 'table') then
-          Me:SerializeTree(Node, Output)
-        else
-          local val_str = serialize_terminal_value(node_value)
-          if is_nil(val_str) then
-            val_str = serialize_terminal_value(_G.tostring(node_value))
-          end
-          Output:Write(val_str)
-        end
-      end
-    local SerializeTree =
-      function(Me, TableAst, Output)
-        local empty_table_str = Me.Config.empty_table_str
-        local opening_table_str = Me.Config.opening_table_str
-        local closing_table_str = Me.Config.closing_table_str
-        local equal_str = Me.Config.equal_str
-        local delimiter_str = Me.Config.delimiter_str
-        local use_compact_sequences = Me.Config.use_compact_sequences
-        local use_compact_indices = Me.Config.use_compact_indices
-        local omit_tail_delimiter = Me.Config.omit_tail_delimiter
-        local notify = Me.Config.notify
-        local KeyVals = TableAst[2]
-        if (#KeyVals == 0) then
-          Output:Write(empty_table_str)
-          return
-        end
-        notify('start_table', Output)
-        Output:Write(opening_table_str)
-        local last_integer_key = 0
-        for index, KeyVal_Rec in ipairs(KeyVals) do
-          local is_first_rec = (index == 1)
-          if not is_first_rec then
-            notify('items_delimiter', Output)
-            Output:Write(delimiter_str)
-          end
-          notify('processing_item', Output)
-          local Key = KeyVal_Rec[1]
-          local Value = KeyVal_Rec[2]
-          local key_type = Key[1]
-          local key_value = Key[2]
-          local brackets_not_required
-          local skip_key_serialization =
-            use_compact_sequences and
-            (
-              (key_type == 'number') and
-              (key_value == last_integer_key + 1)
-            )
-          if skip_key_serialization then
-            last_integer_key = key_value
-            goto serialize_value
-          end
-          brackets_not_required =
-            use_compact_indices and
-            ((key_type == 'string') and is_identifier(key_value))
-          if brackets_not_required then
-            Output:Write(key_value)
-          else
-            Output:Write('[')
-            Me:SerializeValue(Key, Output)
-            Output:Write(']')
-          end
-          Output:Write(equal_str)
-          ::serialize_value::
-          Me:SerializeValue(Value, Output)
-        end
-        if not omit_tail_delimiter then
-          notify('items_delimiter', Output)
-          Output:Write(delimiter_str)
-        end
-        notify('end_table', Output)
-        Output:Write(closing_table_str)
-      end
-    local SerializeGraph =
-      function(Me, GraphAst, Output)
-        local Output = Me.Config.Output
-        local use_compact_indices = Me.Config.use_compact_indices
-        local equal_str = Me.Config.equal_str
-        for index, Rec in ipairs(GraphAst) do
-          local rec_type = Rec[1]
-          if (rec_type == 'local_definition') then
-            local name = Rec[2]
-            local Value = Rec[3]
-            Output:Write('local')
-            Output:Write(' ')
-            Output:Write(name)
-            Output:Write(equal_str)
-            Me:SerializeValue(Value, Output)
-            Output:Write('\n')
-          elseif (rec_type == 'key_assignment') then
-            local dest_name = Rec[2]
-            local Key = Rec[3]
-            local src_name = Rec[4]
-            local key_type = Key[1]
-            local key_value = Key[2]
-            local brackets_not_required =
-              use_compact_indices and
-              ((key_type == 'string') and is_identifier(key_value))
-            Output:Write(dest_name)
-            if brackets_not_required then
-              Output:Write('.')
-              Output:Write(key_value)
-            else
-              Output:Write('[')
-              Me:SerializeValue(Key, Output)
-              Output:Write(']')
-            end
-            Output:Write(equal_str)
-            Output:Write(src_name)
-            Output:Write('\n')
-          elseif (rec_type == 'return_statement') then
-            local Value = Rec[2]
-            Output:Write('return')
-            Output:Write(' ')
-            Me:SerializeValue(Value, Output)
-            Output:Write('\n')
-          end
-        end
-      end
-    local Interface =
+    local Methods =
       {
-        SerializeGraph = SerializeGraph,
-        Config =
-          {
-            use_compact_indices = true,
-            use_compact_sequences = true,
-            omit_tail_delimiter = true,
-            empty_table_str = '{}',
-            opening_table_str = '{',
-            closing_table_str = '}',
-            delimiter_str = ',',
-            equal_str = '=',
-            notify =
-              function(event_name, Output)
-              end,
-          },
-        SerializeValue = SerializeValue,
-        SerializeTree = SerializeTree,
+        create_terminal_type_rec = create_terminal_type_rec,
+        create_name_rec = create_name_rec,
+        create_table_rec = create_table_rec,
+        create_local_def_rec = create_local_def_rec,
+        create_assignment_rec = create_assignment_rec,
+        create_return_rec = create_return_rec,
       }
-    return Interface
+    return Methods
   end
-_G.package.preload[
+package.preload[
   'workshop.concepts.codec_lua_graph.compile.Formatters.readable_long'
 ] =
   function(...)
     local Indent = request('!.concepts.Indent')
-    local patch_table = request('!.table.patch')
     Indent = Indent.create()
     local emit_indent =
       function(Output)
@@ -1436,7 +1896,7 @@ _G.package.preload[
         Output:Write(indent_str)
       end
     local prev_event_name = 'nothing'
-    local on_notify =
+    local notify =
       function(next_event_name, Output)
         if (next_event_name == 'start_table') then
           Indent:Inc()
@@ -1458,72 +1918,80 @@ _G.package.preload[
         end
         prev_event_name = next_event_name
       end
-    local install =
-      function(Config)
-        patch_table(
-          Config,
-          {
-            use_compact_indices = true,
-            use_compact_sequences = false,
-            omit_tail_delimiter = false,
-            empty_table_str = '{ }',
-            opening_table_str = '{',
-            closing_table_str = '}',
-            delimiter_str = ',',
-            equal_str = ' = ',
-            notify = on_notify,
-          }
-        )
-      end
-    return install
+    return notify
   end
-_G.package.preload[
-  'workshop.concepts.codec_lua_graph.compile.Formatters.readable_short'
-] =
+package.preload['workshop.concepts.Ascii.Chars'] =
   function(...)
-    local patch_table = request('!.table.patch')
-    local install =
-      function(Config)
-        patch_table(
-          Config,
-          {
-            use_compact_indices = true,
-            use_compact_sequences = true,
-            omit_tail_delimiter = true,
-            empty_table_str = '{ }',
-            opening_table_str = '{ ',
-            closing_table_str = ' }',
-            delimiter_str = ', ',
-            equal_str = ' = ',
-          }
-        )
+    local Chars
+    do
+      local Codes = request('Codes')
+      local str_char = string.char
+      Chars = {}
+      for name, code in pairs(Codes) do
+        Chars[name] = str_char(code)
       end
-    return install
+    end
+    return Chars
   end
-_G.package.preload[
-  'workshop.concepts.codec_lua_graph.compile.Formatters.minimal'
-] =
+package.preload['workshop.concepts.Ascii.Codes'] =
   function(...)
-    local patch_table = request('!.table.patch')
-    local install =
-      function(Config)
-        patch_table(
-          Config,
-          {
-            use_compact_indices = true,
-            use_compact_sequences = true,
-            omit_tail_delimiter = true,
-            empty_table_str = '{}',
-            opening_table_str = '{',
-            closing_table_str = '}',
-            delimiter_str = ',',
-            equal_str = '=',
-          }
-        )
-      end
-    return install
+    local Codes =
+      {
+        bell = 7,
+        backspace = 8,
+        tab = 9,
+        newline = 10,
+        vertical_tab = 11,
+        form_feed = 12,
+        carriage_return = 13,
+        space = 32,
+        delete = 127,
+        plus = 43,
+        minus = 45,
+        asterisk = 42,
+        slash = 47,
+        less_than = 60,
+        equals = 61,
+        greater_than = 62,
+        dot = 46,
+        comma = 44,
+        colon = 58,
+        semicolon = 59,
+        single_quote = 39,
+        double_quote = 34,
+        backtick = 96,
+        backslash = 92,
+        number_sign = 35,
+        question_mark = 63,
+        bang = 33,
+        percent = 37,
+        ampersand = 38,
+        dollar_sign = 36,
+        at_sign = 64,
+        caret = 94,
+        underscore = 95,
+        pipe = 124,
+        tilde = 126,
+        opening_paren = 40,
+        closing_paren = 41,
+        opening_bracket = 91,
+        closing_bracket = 93,
+        opening_brace = 123,
+        closing_brace = 125,
+      }
+    return Codes
   end
-_G.package.preload['workshop.concepts.StreamIo.Output.String'] =
+package.preload['workshop.concepts.Ascii.is_control_code'] =
+  function(...)
+    local assert_byte = request('!.number.assert_byte')
+    local is_control_code =
+      function(code)
+        assert_byte(code)
+        return (code <= 31) or (code == 127)
+      end
+    return is_control_code
+  end
+package.preload['workshop.concepts.StreamIo.Output.String'] =
   function(...)
     local list_add_item = request('!.concepts.list.add_item')
     local list_to_string = request('!.concepts.list.to_string')
