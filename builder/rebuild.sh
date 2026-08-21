@@ -4,7 +4,7 @@
 
 #
 # Author: Martin Eden
-# Last mod.: 2026-07-11
+# Last mod.: 2026-08-21
 #
 
 #
@@ -25,7 +25,11 @@
 #   https://github.com/martin-eden/lua_code_formatter
 #
 
-set -eu
+set -e -u
+
+#
+# src/
+#
 
 cd ../src
 
@@ -38,6 +42,10 @@ rm deploy.sh
 
 mv deploy/workshop/ .
 rm -rf deploy/
+
+#
+# builder/
+#
 
 cd ../builder
 
@@ -56,13 +64,14 @@ mv \
   ../deploy/serialize_lua_graph.melded.stripped.lua \
   ../deploy/serialize_lua_graph.lua
 
-echo
+#
+# test/
+#
+
+cd ../test
 
 # Call test script
-cd ../test
-lua run.lua
+lua run.lua > output/graph.lua
 
-# 2026-04-25
-# 2026-06-04
-# 2026-06-16
-# 2026-06-20
+# 2026 # # # #
+# 2026-08-21
