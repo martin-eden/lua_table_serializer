@@ -2,22 +2,30 @@
 
 --[[
   Author: Martin Eden
-  Last mod.: 2026-06-20
+  Last mod.: 2026-08-21
 ]]
 
 package.path = package.path .. ';../deploy/?.lua'
-local t2s = require('serialize_lua_graph')
 
-local test =
-  function(val)
-    print(t2s(val))
-  end
+-- Print graph as Lua code
+local test
+do
+  local g2s = require('serialize_lua_graph')
+  test =
+    function(Graph)
+      io.stdout:write(g2s(Graph))
+    end
+end
 
-local Graph = { }
-Graph[{ Graph }] = { Graph }
-test(Graph)
+-- Print graph with self-links in keys and values
+do
+  local Graph = { }
+  Graph[{ Graph }] = { Graph }
+
+  test(Graph)
+end
 
 --[[
-  2026-06-17
-  2026-06-20
+  2026 # #
+  2026-08-21
 ]]
