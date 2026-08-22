@@ -2,7 +2,7 @@
 
 --[[
   Author: Martin Eden
-  Last mod.: 2026-08-21
+  Last mod.: 2026-08-22
 ]]
 
 local type_name
@@ -25,19 +25,19 @@ do
     request('!.concepts.lua.serialize_terminal_value')
 
   serialize_value =
-    function(Settings, Ast)
+    function(Settings, Node)
       local Output = Settings.Output
-      local type = Ast[1]
-      local value = Ast[2]
+      local node_type = Node[1]
+      local node_value = Node[2]
 
-      if (type == type_name) then
-        Output:Write(value)
-      elseif (type == type_table) then
-        serialize_tree(Settings, Ast)
+      if (node_type == type_name) then
+        Output:Write(node_value)
+      elseif (node_type == type_table) then
+        serialize_tree(Settings, Node)
       else
-        local val_str = serialize_terminal_value(value)
+        local val_str = serialize_terminal_value(node_value)
         if is_nil(val_str) then
-          val_str = serialize_terminal_value(tostring(value))
+          val_str = serialize_terminal_value(tostring(node_value))
         end
         Output:Write(val_str)
       end
@@ -45,85 +45,113 @@ do
 end
 
 do
-  local is_identifier = request('!.concepts.lua.is_identifier')
+  local serialize_index
+  do
+    local is_identifier = request('!.concepts.lua.is_identifier')
+
+    serialize_index =
+      function(Settings, Index)
+        local Output = Settings.Output
+        local start_index = Settings.Syntels.start_index
+        local end_index = Settings.Syntels.end_index
+        local index_type = Index[1]
+        local index_value = Index[2]
+        local use_compact_indices = Settings.use_compact_indices
+
+        local brackets_not_required =
+          use_compact_indices and
+          ((index_type == type_string) and is_identifier(index_value))
+
+        if brackets_not_required then
+          Output:Write(index_value)
+        else
+          Output:Write(start_index)
+          serialize_value(Settings, Index)
+          Output:Write(end_index)
+        end
+      end
+  end
+
+  local event_start_table
+  local event_end_table
+  local event_start_item
+  local event_end_item
+  do
+    local NotificationEvents = request('NotificationEvents')
+    event_start_table = NotificationEvents.start_table
+    event_end_table = NotificationEvents.end_table
+    event_start_item = NotificationEvents.start_item
+    event_end_item = NotificationEvents.end_item
+  end
 
   serialize_tree =
     function(Settings, TableAst)
       local Output = Settings.Output
-      local Write = Settings.Writer
 
-      local use_compact_sequences = Settings.use_compact_sequences
-      local use_compact_indices = Settings.use_compact_indices
-      local omit_tail_delimiter = Settings.omit_tail_delimiter
+      local empty_table
+      local start_table
+      local end_table
+      local item_separator
+      local assign
+      do
+        local Syntels = Settings.Syntels
+        empty_table = Syntels.empty_table
+        start_table = Syntels.start_table
+        end_table = Syntels.end_table
+        item_separator = Syntels.item_separator
+        assign = Syntels.assign
+      end
 
       local notify = Settings.notify
-
+      local use_compact_sequences = Settings.use_compact_sequences
+      local omit_tail_delimiter = Settings.omit_tail_delimiter
       local KeyVals = TableAst[2]
 
       if (#KeyVals == 0) then
-        Write:EmptyTable()
+        Output:Write(empty_table)
 
         return
       end
 
-      notify('start_table', Output)
-      Write:StartTable()
+      notify(event_start_table, Output)
+      Output:Write(start_table)
 
-      local last_integer_key = 0
+      local next_integer_key = 1
 
       for index, KeyVal_Rec in ipairs(KeyVals) do
-        local is_first_rec = (index == 1)
-        if not is_first_rec then
-          notify('items_delimiter', Output)
-          Write:SeparateItem()
+        if (index ~= 1) then
+          notify(event_end_item, Output)
+          Output:Write(item_separator)
         end
 
-        notify('processing_item', Output)
+        notify(event_start_item, Output)
 
         local Key = KeyVal_Rec[1]
         local Value = KeyVal_Rec[2]
-
         local key_type = Key[1]
         local key_value = Key[2]
 
-        local brackets_not_required
-
         local skip_key_serialization =
           use_compact_sequences and
-          ((key_type == type_number) and (key_value == last_integer_key + 1))
+          ((key_type == type_number) and (key_value == next_integer_key))
 
         if skip_key_serialization then
-          last_integer_key = key_value
-
-          goto serialize_value
-        end
-
-        brackets_not_required =
-          use_compact_indices and
-          ((key_type == type_string) and is_identifier(key_value))
-
-        if brackets_not_required then
-          Output:Write(key_value)
+          next_integer_key = key_value + 1
         else
-          Write:StartIndex()
-          serialize_value(Settings, Key)
-          Write:EndIndex()
+          serialize_index(Settings, Key)
+          Output:Write(assign)
         end
-
-        Write:Assign()
-
-        ::serialize_value::
 
         serialize_value(Settings, Value)
       end
 
       if not omit_tail_delimiter then
-        notify('items_delimiter', Output)
-        Write:SeparateItem()
+        notify(event_end_item, Output)
+        Output:Write(item_separator)
       end
 
-      notify('end_table', Output)
-      Write:EndTable()
+      notify(event_end_table, Output)
+      Output:Write(end_table)
     end
 end
 
@@ -132,4 +160,5 @@ return serialize_value
 
 --[[
   2026 # # # # # #
+  2026-08-22
 ]]

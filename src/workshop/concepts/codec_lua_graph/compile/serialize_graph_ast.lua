@@ -2,7 +2,7 @@
 
 --[[
   Author: Martin Eden
-  Last mod.: 2026-08-21
+  Last mod.: 2026-08-22
 ]]
 
 local serialize_graph
@@ -20,14 +20,45 @@ do
   end
 
   local serialize_value = request('serialize_tree_ast')
-  local is_identifier = request('!.concepts.lua.is_identifier')
+
+  local serialize_index
+  do
+    local is_identifier = request('!.concepts.lua.is_identifier')
+    serialize_index =
+      function(Settings, Index)
+        local Output = Settings.Output
+        local name_separator = Settings.Syntels.name_separator
+        local start_index = Settings.Syntels.start_index
+        local end_index = Settings.Syntels.end_index
+        local index_value = Index[2]
+
+        local brackets_not_required
+        do
+          local use_compact_indices = Settings.use_compact_indices
+          local index_type = Index[1]
+          brackets_not_required =
+            use_compact_indices and
+            ((index_type == type_string) and is_identifier(index_value))
+        end
+
+        if brackets_not_required then
+          Output:Write(name_separator)
+          Output:Write(index_value)
+        else
+          Output:Write(start_index)
+          serialize_value(Settings, Index)
+          Output:Write(end_index)
+        end
+      end
+  end
 
   serialize_graph =
     function(Settings, GraphAst)
       local Output = Settings.Output
-      local Write = Settings.Writer
-
-      local use_compact_indices = Settings.use_compact_indices
+      local kw_local = Settings.Syntels.kw_local
+      local assign = Settings.Syntels.assign
+      local statement_separator = Settings.Syntels.statement_separator
+      local kw_return = Settings.Syntels.kw_return
 
       for index, Rec in ipairs(GraphAst) do
         local rec_type = Rec[1]
@@ -36,42 +67,27 @@ do
           local name = Rec[2]
           local Value = Rec[3]
 
-          Write:Keyword_Local()
+          Output:Write(kw_local)
           Output:Write(name)
-          Write:Assign()
+          Output:Write(assign)
           serialize_value(Settings, Value)
-          Write:EndStatement()
         elseif (rec_type == type_assignment) then
           local dest_name = Rec[2]
-          local Key = Rec[3]
+          local Index = Rec[3]
           local src_name = Rec[4]
 
-          local key_type = Key[1]
-          local key_value = Key[2]
-
-          local brackets_not_required =
-            use_compact_indices and
-            ((key_type == type_string) and is_identifier(key_value))
-
           Output:Write(dest_name)
-          if brackets_not_required then
-            Write:SeparateName()
-            Output:Write(key_value)
-          else
-            Write:StartIndex()
-            serialize_value(Settings, Key)
-            Write:EndIndex()
-          end
-          Write:Assign()
+          serialize_index(Settings, Index)
+          Output:Write(assign)
           Output:Write(src_name)
-          Write:EndStatement()
         elseif (rec_type == type_return) then
           local Value = Rec[2]
 
-          Write:Keyword_Return()
+          Output:Write(kw_return)
           serialize_value(Settings, Value)
-          Write:EndStatement()
         end
+
+        Output:Write(statement_separator)
       end
     end
 end
