@@ -1140,83 +1140,118 @@ package.preload[
       local serialize_terminal_value =
         request('!.concepts.lua.serialize_terminal_value')
       serialize_value =
-        function(Settings, Ast)
+        function(Settings, Node)
           local Output = Settings.Output
-          local type = Ast[1]
-          local value = Ast[2]
-          if (type == type_name) then
-            Output:Write(value)
-          elseif (type == type_table) then
-            serialize_tree(Settings, Ast)
+          local node_type = Node[1]
+          local node_value = Node[2]
+          if (node_type == type_name) then
+            Output:Write(node_value)
+          elseif (node_type == type_table) then
+            serialize_tree(Settings, Node)
           else
-            local val_str = serialize_terminal_value(value)
+            local val_str = serialize_terminal_value(node_value)
             if is_nil(val_str) then
-              val_str = serialize_terminal_value(tostring(value))
+              val_str = serialize_terminal_value(tostring(node_value))
             end
             Output:Write(val_str)
           end
         end
     end
     do
-      local is_identifier = request('!.concepts.lua.is_identifier')
+      local serialize_index
+      do
+        local is_identifier = request('!.concepts.lua.is_identifier')
+        serialize_index =
+          function(Settings, Index)
+            local Output = Settings.Output
+            local start_index = Settings.Syntels.start_index
+            local end_index = Settings.Syntels.end_index
+            local index_type = Index[1]
+            local index_value = Index[2]
+            local use_compact_indices = Settings.use_compact_indices
+            local brackets_not_required =
+              use_compact_indices and
+              (
+                (index_type == type_string) and
+                is_identifier(index_value)
+              )
+            if brackets_not_required then
+              Output:Write(index_value)
+            else
+              Output:Write(start_index)
+              serialize_value(Settings, Index)
+              Output:Write(end_index)
+            end
+          end
+      end
+      local event_start_table
+      local event_end_table
+      local event_start_item
+      local event_end_item
+      do
+        local NotificationEvents = request('NotificationEvents')
+        event_start_table = NotificationEvents.start_table
+        event_end_table = NotificationEvents.end_table
+        event_start_item = NotificationEvents.start_item
+        event_end_item = NotificationEvents.end_item
+      end
       serialize_tree =
         function(Settings, TableAst)
           local Output = Settings.Output
-          local Write = Settings.Writer
-          local use_compact_sequences = Settings.use_compact_sequences
-          local use_compact_indices = Settings.use_compact_indices
-          local omit_tail_delimiter = Settings.omit_tail_delimiter
+          local empty_table
+          local start_table
+          local end_table
+          local item_separator
+          local assign
+          do
+            local Syntels = Settings.Syntels
+            empty_table = Syntels.empty_table
+            start_table = Syntels.start_table
+            end_table = Syntels.end_table
+            item_separator = Syntels.item_separator
+            assign = Syntels.assign
+          end
           local notify = Settings.notify
+          local use_compact_sequences = Settings.use_compact_sequences
+          local omit_tail_delimiter = Settings.omit_tail_delimiter
           local KeyVals = TableAst[2]
           if (#KeyVals == 0) then
-            Write:EmptyTable()
+            Output:Write(empty_table)
             return
           end
-          notify('start_table', Output)
-          Write:StartTable()
-          local last_integer_key = 0
+          notify(event_start_table, Output)
+          Output:Write(start_table)
+          local next_integer_key = 1
           for index, KeyVal_Rec in ipairs(KeyVals) do
-            local is_first_rec = (index == 1)
-            if not is_first_rec then
-              notify('items_delimiter', Output)
-              Write:SeparateItem()
+            if (index ~= 1) then
+              notify(event_end_item, Output)
+              Output:Write(item_separator)
             end
-            notify('processing_item', Output)
+            notify(event_start_item, Output)
             local Key = KeyVal_Rec[1]
             local Value = KeyVal_Rec[2]
             local key_type = Key[1]
             local key_value = Key[2]
-            local brackets_not_required
             local skip_key_serialization =
               use_compact_sequences and
               (
                 (key_type == type_number) and
-                (key_value == last_integer_key + 1)
+                (key_value == next_integer_key)
               )
             if skip_key_serialization then
-              last_integer_key = key_value
-              goto serialize_value
-            end
-            brackets_not_required =
-              use_compact_indices and
-              ((key_type == type_string) and is_identifier(key_value))
-            if brackets_not_required then
-              Output:Write(key_value)
+              next_integer_key = key_value + 1
             else
-              Write:StartIndex()
-              serialize_value(Settings, Key)
-              Write:EndIndex()
+              serialize_index(Settings, Key)
+              Output:Write(assign)
             end
-            Write:Assign()
-            ::serialize_value::
             serialize_value(Settings, Value)
           end
           if not omit_tail_delimiter then
-            notify('items_delimiter', Output)
-            Write:SeparateItem()
+            notify(event_end_item, Output)
+            Output:Write(item_separator)
           end
-          notify('end_table', Output)
-          Write:EndTable()
+          notify(event_end_table, Output)
+          Output:Write(end_table)
         end
     end
     return serialize_value
@@ -1269,24 +1304,17 @@ package.preload['workshop.concepts.codec_lua_graph.compile.Initializer'] =
               [Behaviors.omit_tail_delimiter] = false,
             },
         }
-      local Writers_Map =
+      local Syntels_Map =
         {
-          [Styles.minimal] = request('Writers.Minimal'),
-          [Styles.readable_short] = request('Writers.Readable_Short'),
-          [Styles.readable_long] = request('Writers.Readable_Long'),
+          [Styles.minimal] = request('Syntels.minimal'),
+          [Styles.readable_short] = request('Syntels.readable_short'),
+          [Styles.readable_long] = request('Syntels.readable_long'),
         }
-      local Notify_Map
-      do
-        local notify_default =
-          function(event_name, Output)
-          end
-        Notify_Map =
-          {
-            [Styles.minimal] = notify_default,
-            [Styles.readable_short] = notify_default,
-            [Styles.readable_long] = request('Formatters.readable_long'),
-          }
-      end
+      local Formatters =
+        { [Styles.readable_long] = request('Formatters.Readable_Long') }
+      local empty_func =
+        function()
+        end
       configure_style =
         function(Settings, Output, Options)
           assert_table(Options)
@@ -1298,9 +1326,8 @@ package.preload['workshop.concepts.codec_lua_graph.compile.Initializer'] =
           if not style_idx then
             error('Unknown style.')
           end
-          local Writer_Module = Writers_Map[style_idx]
           Settings.Output = Output
-          Settings.Writer = Writer_Module.create(Output)
+          Settings.Syntels = Syntels_Map[style_idx]
           do
             local Behavior = StyleToBehavior[style_idx]
             for behavior_idx, flag_value in ipairs(Behavior) do
@@ -1314,7 +1341,14 @@ package.preload['workshop.concepts.codec_lua_graph.compile.Initializer'] =
               Settings[behavior_flag_name] = Options[behavior_flag_name]
             end
           end
-          Settings.notify = Notify_Map[style_idx]
+          do
+            local Formatter = Formatters[style_idx]
+            local notify_func = empty_func
+            if Formatter then
+              notify_func = Formatter.create()
+            end
+            Settings.notify = notify_func
+          end
         end
     end
     local wrap_output =
@@ -1521,49 +1555,68 @@ package.preload[
         type_string = TypeNames.type_string
       end
       local serialize_value = request('serialize_tree_ast')
-      local is_identifier = request('!.concepts.lua.is_identifier')
+      local serialize_index
+      do
+        local is_identifier = request('!.concepts.lua.is_identifier')
+        serialize_index =
+          function(Settings, Index)
+            local Output = Settings.Output
+            local name_separator = Settings.Syntels.name_separator
+            local start_index = Settings.Syntels.start_index
+            local end_index = Settings.Syntels.end_index
+            local index_value = Index[2]
+            local brackets_not_required
+            do
+              local use_compact_indices = Settings.use_compact_indices
+              local index_type = Index[1]
+              brackets_not_required =
+                use_compact_indices and
+                (
+                  (index_type == type_string) and
+                  is_identifier(index_value)
+                )
+            end
+            if brackets_not_required then
+              Output:Write(name_separator)
+              Output:Write(index_value)
+            else
+              Output:Write(start_index)
+              serialize_value(Settings, Index)
+              Output:Write(end_index)
+            end
+          end
+      end
       serialize_graph =
         function(Settings, GraphAst)
           local Output = Settings.Output
-          local Write = Settings.Writer
-          local use_compact_indices = Settings.use_compact_indices
+          local kw_local = Settings.Syntels.kw_local
+          local assign = Settings.Syntels.assign
+          local statement_separator =
+            Settings.Syntels.statement_separator
+          local kw_return = Settings.Syntels.kw_return
           for index, Rec in ipairs(GraphAst) do
             local rec_type = Rec[1]
             if (rec_type == type_local) then
               local name = Rec[2]
               local Value = Rec[3]
-              Write:Keyword_Local()
+              Output:Write(kw_local)
               Output:Write(name)
-              Write:Assign()
+              Output:Write(assign)
               serialize_value(Settings, Value)
-              Write:EndStatement()
             elseif (rec_type == type_assignment) then
               local dest_name = Rec[2]
-              local Key = Rec[3]
+              local Index = Rec[3]
               local src_name = Rec[4]
-              local key_type = Key[1]
-              local key_value = Key[2]
-              local brackets_not_required =
-                use_compact_indices and
-                ((key_type == type_string) and is_identifier(key_value))
               Output:Write(dest_name)
-              if brackets_not_required then
-                Write:SeparateName()
-                Output:Write(key_value)
-              else
-                Write:StartIndex()
-                serialize_value(Settings, Key)
-                Write:EndIndex()
-              end
-              Write:Assign()
+              serialize_index(Settings, Index)
+              Output:Write(assign)
               Output:Write(src_name)
-              Write:EndStatement()
             elseif (rec_type == type_return) then
               local Value = Rec[2]
-              Write:Keyword_Return()
+              Output:Write(kw_return)
               serialize_value(Settings, Value)
-              Write:EndStatement()
             end
+            Output:Write(statement_separator)
           end
         end
     end
@@ -1612,207 +1665,75 @@ package.preload[
     return get_tree_ast
   end
 package.preload[
-  'workshop.concepts.codec_lua_graph.compile.Writers.Readable_Long'
+  'workshop.concepts.codec_lua_graph.compile.NotificationEvents'
 ] =
   function(...)
-    local Assign =
-      function(Me)
-        Me:Write(' = ')
-      end
-    local EmptyTable =
-      function(Me)
-        Me:Write('{ }')
-      end
-    local Interface
-    local create =
-      function(OutputStream)
-        return Interface.internal_create(OutputStream, Interface)
-      end
-    do
-      local BaseInterface = request('Minimal')
-      local patch = request('!.table.patch')
-      Interface = new(BaseInterface)
-      patch(
-        Interface,
-        { create = create, Assign = Assign, EmptyTable = EmptyTable }
-      )
-    end
-    return Interface
-  end
-package.preload[
-  'workshop.concepts.codec_lua_graph.compile.Writers.Minimal'
-] =
-  function(...)
-    local space = ' '
-    local newline = '\n'
-    local Keyword_Local =
-      function(Stream)
-        Stream:Write('local' .. space)
-      end
-    local Keyword_Return =
-      function(Stream)
-        Stream:Write('return' .. space)
-      end
-    local EndStatement =
-      function(Stream)
-        Stream:Write(newline)
-      end
-    local SeparateName =
-      function(Stream)
-        Stream:Write('.')
-      end
-    local Assign =
-      function(Stream)
-        Stream:Write('=')
-      end
-    local SeparateItem =
-      function(Stream)
-        Stream:Write(',')
-      end
-    local StartTable =
-      function(Stream)
-        Stream:Write('{')
-      end
-    local EndTable =
-      function(Stream)
-        Stream:Write('}')
-      end
-    local EmptyTable =
-      function(Stream)
-        Stream:Write('{}')
-      end
-    local StartIndex =
-      function(Stream)
-        Stream:Write('[')
-      end
-    local EndIndex =
-      function(Stream)
-        Stream:Write(']')
-      end
-    local Interface
-    local create =
-      function(OutputStream)
-        return Interface.internal_create(OutputStream, Interface)
-      end
-    do
-      local BaseInterface = request('Interface')
-      local patch = request('!.table.patch')
-      Interface = new(BaseInterface)
-      patch(
-        Interface,
-        {
-          create = create,
-          Keyword_Local = Keyword_Local,
-          SeparateName = SeparateName,
-          EndStatement = EndStatement,
-          Keyword_Return = Keyword_Return,
-          Assign = Assign,
-          SeparateItem = SeparateItem,
-          StartTable = StartTable,
-          EndTable = EndTable,
-          EmptyTable = EmptyTable,
-          StartIndex = StartIndex,
-          EndIndex = EndIndex,
-        }
-      )
-    end
-    return Interface
-  end
-package.preload[
-  'workshop.concepts.codec_lua_graph.compile.Writers.Readable_Short'
-] =
-  function(...)
-    local Assign =
-      function(Me)
-        Me:Write(' = ')
-      end
-    local SeparateItem =
-      function(Me)
-        Me:Write(', ')
-      end
-    local StartTable =
-      function(Me)
-        Me:Write('{ ')
-      end
-    local EndTable =
-      function(Me)
-        Me:Write(' }')
-      end
-    local EmptyTable =
-      function(Me)
-        Me:Write('{ }')
-      end
-    local Interface
-    local create =
-      function(OutputStream)
-        return Interface.internal_create(OutputStream, Interface)
-      end
-    do
-      local BaseInterface = request('Minimal')
-      local patch = request('!.table.patch')
-      Interface = new(BaseInterface)
-      patch(
-        Interface,
-        {
-          create = create,
-          Assign = Assign,
-          SeparateItem = SeparateItem,
-          StartTable = StartTable,
-          EndTable = EndTable,
-          EmptyTable = EmptyTable,
-        }
-      )
-    end
-    return Interface
-  end
-package.preload[
-  'workshop.concepts.codec_lua_graph.compile.Writers.Interface'
-] =
-  function(...)
-    local internal_create
-    do
-      local attach_methods = request('!.table.attach_methods')
-      internal_create =
-        function(OutputStream, Interface)
-          local State = { OutputStream }
-          attach_methods(State, Interface)
-          return State
-        end
-    end
-    local get_output_stream =
-      function(Me)
-        return Me[1]
-      end
-    local write =
-      function(Me, str)
-        get_output_stream(Me):Write(str)
-      end
-    local writer_method =
-      function(Me)
-      end
-    local Interface
-    local create =
-      function(OutputStream)
-        return internal_create(OutputStream, Interface)
-      end
-    Interface =
+    return
       {
-        internal_create = internal_create,
-        Write = write,
-        create = create,
-        Keyword_Local = writer_method,
-        SeparateName = writer_method,
-        EndStatement = writer_method,
-        Keyword_Return = writer_method,
-        Assign = writer_method,
-        SeparateItem = writer_method,
-        StartTable = writer_method,
-        EndTable = writer_method,
-        EmptyTable = writer_method,
-        StartIndex = writer_method,
-        EndIndex = writer_method,
+        start_table = 'start_table',
+        end_table = 'end_table',
+        start_item = 'start_item',
+        end_item = 'end_item',
       }
-    return Interface
+  end
+package.preload[
+  'workshop.concepts.codec_lua_graph.compile.Syntels.readable_long'
+] =
+  function(...)
+    local Syntels
+    do
+      local BaseSyntels = request('minimal')
+      Syntels =
+        new(BaseSyntels, { assign = ' = ', empty_table = '{ }' })
+    end
+    return Syntels
+  end
+package.preload[
+  'workshop.concepts.codec_lua_graph.compile.Syntels.readable_short'
+] =
+  function(...)
+    local Syntels
+    do
+      local BaseSyntels = request('minimal')
+      Syntels =
+        new(
+          BaseSyntels,
+          {
+            assign = ' = ',
+            item_separator = ', ',
+            start_table = '{ ',
+            end_table = ' }',
+            empty_table = '{ }',
+          }
+        )
+    end
+    return Syntels
+  end
+package.preload[
+  'workshop.concepts.codec_lua_graph.compile.Syntels.minimal'
+] =
+  function(...)
+    local space
+    local newline
+    do
+      local AsciiChars = request('!.concepts.Ascii.Chars')
+      space = AsciiChars.space
+      newline = AsciiChars.newline
+    end
+    return
+      {
+        start_table = '{',
+        end_table = '}',
+        empty_table = '{}',
+        start_index = '[',
+        end_index = ']',
+        assign = '=',
+        item_separator = ',',
+        kw_local = 'local' .. space,
+        name_separator = '.',
+        statement_separator = newline,
+        kw_return = 'return' .. space,
+      }
   end
 package.preload[
   'workshop.concepts.codec_lua_graph.compile.Ast.TypeNames'
@@ -1825,7 +1746,7 @@ package.preload[
         type_string = 'string',
         type_table = 'table',
         type_local = 'definition',
-        type_assignment = 'assignment',
+        type_assignment = 'indexed_assignment',
         type_return = 'emit',
       }
     return TypeNames
@@ -1881,44 +1802,76 @@ package.preload['workshop.concepts.codec_lua_graph.compile.Ast.Methods'] =
     return Methods
   end
 package.preload[
-  'workshop.concepts.codec_lua_graph.compile.Formatters.readable_long'
+  'workshop.concepts.codec_lua_graph.compile.Formatters.Readable_Long'
 ] =
   function(...)
-    local Indent = request('!.concepts.Indent')
-    Indent = Indent.create()
-    local emit_indent =
-      function(Output)
-        Output:Write('\n')
-        local indent_str = Indent:ToString()
-        if (indent_str == '') then
-          return
+    local Indent
+    local prev_event_name
+    local empty = ''
+    local process_event
+    do
+      local emit_indent
+      do
+        local newline
+        do
+          local AsciiChars = request('!.concepts.Ascii.Chars')
+          newline = AsciiChars.newline
         end
-        Output:Write(indent_str)
+        emit_indent =
+          function(Output)
+            Output:Write(newline)
+            local indent_str = Indent:ToString()
+            if (indent_str == empty) then
+              return
+            end
+            Output:Write(indent_str)
+          end
       end
-    local prev_event_name = 'nothing'
-    local notify =
-      function(next_event_name, Output)
-        if (next_event_name == 'start_table') then
-          Indent:Inc()
-        elseif (next_event_name == 'end_table') then
-          Indent:Dec()
-        end
-        if
-          (
-            (prev_event_name == 'start_table') and
-            (next_event_name ~= 'end_table')
-          ) or
-          (prev_event_name == 'items_delimiter') or
-          (
-            (prev_event_name ~= 'start_table') and
-            (next_event_name == 'end_table')
-          )
-        then
-          emit_indent(Output)
-        end
-        prev_event_name = next_event_name
+      local event_start_table
+      local event_end_table
+      local event_start_item
+      local event_end_item
+      do
+        local NotificationEvents = request('^.NotificationEvents')
+        event_start_table = NotificationEvents.start_table
+        event_end_table = NotificationEvents.end_table
+        event_start_item = NotificationEvents.start_item
+        event_end_item = NotificationEvents.end_item
       end
-    return notify
+      process_event =
+        function(next_event_name, Output)
+          if (next_event_name == event_start_table) then
+            Indent:Inc()
+          elseif (next_event_name == event_end_table) then
+            Indent:Dec()
+          end
+          if
+            (
+              (prev_event_name == event_start_table) and
+              (next_event_name ~= event_end_table)
+            ) or
+            (prev_event_name == event_end_item) or
+            (
+              (prev_event_name ~= event_start_table) and
+              (next_event_name == event_end_table)
+            )
+          then
+            emit_indent(Output)
+          end
+          prev_event_name = next_event_name
+        end
+    end
+    local create
+    do
+      local IndentClass = request('!.concepts.Indent')
+      create =
+        function()
+          Indent = IndentClass.create()
+          prev_event_name = empty
+          return process_event
+        end
+    end
+    return { create = create }
   end
 package.preload['workshop.concepts.Ascii.Chars'] =
   function(...)
