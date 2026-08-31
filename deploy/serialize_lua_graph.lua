@@ -1145,9 +1145,6 @@ package.preload['workshop.concepts.codec_lua_graph.compile.initialize'] =
             ['omit_tail_delimiter'] = false,
           },
       }
-    local empty_func =
-      function()
-      end
     return
       function(Settings, Output, Options)
         assert_table(Options)
@@ -1349,6 +1346,7 @@ package.preload[
     local table_iterator = request('!.table.ordered_pass')
     local get_assembly_order = request('!.mechs.graph.assembly_order')
     local NameGiver = request('!.mechs.name_giver')
+    local type_local = request('Ast.TypeNames').type_local
     local add_to_list = request('!.concepts.list.add_item')
     local tbl_remove = table.remove
     return
@@ -1417,7 +1415,7 @@ package.preload[
         do
           local PrelastNode = Result[#Result - 1]
           local prelast_type = PrelastNode[1]
-          if (prelast_type == 'local_definition') then
+          if (prelast_type == type_local) then
             local prelast_value = PrelastNode[3]
             tbl_remove(Result)
             tbl_remove(Result)
@@ -1487,6 +1485,7 @@ package.preload[
       local syntel_assign = Syntels.assign
       local syntel_item_separator = Syntels.item_separator
       local syntel_statement_separator = Syntels.statement_separator
+      local syntel_return = Syntels.kw_return
       local space
       local newline
       do
@@ -1514,7 +1513,8 @@ package.preload[
                   (next_token == syntel_end_table) or
                   (prev_token == syntel_assign) or
                   (next_token == syntel_assign) or
-                  (prev_token == syntel_item_separator)
+                  (prev_token == syntel_item_separator) or
+                  (prev_token == syntel_return)
                 action_emit_newline =
                   action_emit_newline or
                   (prev_token == syntel_statement_separator)
@@ -1531,7 +1531,8 @@ package.preload[
                   action_emit_space or
                   (prev_token == syntel_assign) or
                   (next_token == syntel_assign) or
-                  is_empty_table
+                  is_empty_table or
+                  (prev_token == syntel_return)
                 action_emit_newline =
                   action_emit_newline or
                   (
