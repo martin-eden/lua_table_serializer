@@ -69,8 +69,8 @@ We'll demonstrate their effects on excerpt of `_G` table printout.
 |                         | `coroutine = T_1,`     |   ☑   |
 | `use_compact_sequences` | `[1] = 'nil',`         |   ☐   |
 |                         | `'nil',`               |   ☑   |
-| `omit_tail_delimiter`   | `['utf8'] = T_8 };`    |   ☐   |
-|                         | `['utf8'] = T_8, };`   |   ☑   |
+| `omit_tail_delimiter`   | `['utf8'] = T_8, };`   |   ☐   |
+|                         | `['utf8'] = T_8 };`    |   ☑   |
 
 
 ## Details/limitations
