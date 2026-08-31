@@ -2,7 +2,7 @@
 
 | Created |  Updated   |  Size   | License |
 |:-------:|:----------:|:-------:|:-------:|
-| 2017-05 | 2026-08-30 | < 60 K  |  LGPL3  |
+| 2017-05 | 2026-08-31 | < 60 K  |  LGPL3  |
 
 
 ## What
@@ -73,6 +73,50 @@ We'll demonstrate their effects on excerpt of `_G` table printout.
 |                         | `['utf8'] = T_8, };`   |   ☑   |
 
 
+## Details/limitations
+
+* It does not distinguish between -NaN and NaN
+
+  Our check for NaN is `n ~= n`.
+
+  So both `-(0/0)` and `0/0` are serialized to string `0/0`.
+
+  From our point of view concept "this is not a number, but negative"
+  is gibberish.
+
+* You can hit limit of Lua `local`'s
+
+  For common subtables we emit something like `local T_2 = {`.
+
+  Lua implementations have limit on number of locals near 200.
+
+  So when number of common subtables is over 200 your Lua interpreter
+  won't be able to load code.
+
+  We think it's not our problem. From our point of view we're exporting
+  statement with value capture.
+
+* Functions, threads, userdata and metatables are not serialized
+
+  First, it makes no practical sense to serialize functions.
+
+  C functions can't be serialized.
+
+  For Lua functions you can store their bytecode. But its instructions
+  may use upvalues. We see no practical sense in trouble of retrieving
+  upvalues (which may end up to something unserializeable).
+
+  Second, threads (coroutines) and userdata are not serializeable.
+
+  Third, metatables.
+
+  Our common pattern is that metatables contain functions. Not serializeable.
+
+  Even if in your case they contain plain strings/tables
+  we see no practical need in tracking links between base table
+  and metatable and adding AST node to emit `setmetatable`.
+
+
 ## Requirements
 
   * Lua 5.3 (or 5.4, 5.5)
@@ -101,6 +145,12 @@ We'll demonstrate their effects on excerpt of `_G` table printout.
 
 ## See also
 
+  * [`Ser`][Ser] -- Beautiful trickster-style implementation of same
+    thing by `Jasmijn Wellner`
+
+    We've overgrown obsession with regexps and strings long ago.
+    Still it's very nice example of that style. Ten times less code!
+
   * [`workshop`][workshop] -- My personal Lua framework on which this tool is based
   * [My other projects][contents]
 
@@ -113,5 +163,6 @@ We'll demonstrate their effects on excerpt of `_G` table printout.
 [create_deploy]: builder/create_deploy.lua
 [builder]: builder/
 
+[Ser]: https://github.com/gvx/Ser
 [workshop]: https://github.com/martin-eden/workshop
 [contents]: https://github.com/martin-eden/contents
