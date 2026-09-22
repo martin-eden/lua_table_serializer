@@ -730,21 +730,21 @@ package.preload['workshop.concepts.Indent'] =
   end
 package.preload['workshop.concepts.RangePoint'] =
   function(...)
-    local create_instance = request('!.table.create_instance')
+    local Interface
+    local create
+    do
+      local DefaultCore = { 0, 0, 5 }
+      local create_instance = request('!.table.create_instance')
+      create =
+        function(OptCore)
+          return create_instance(OptCore or DefaultCore, Interface)
+        end
+    end
     local min = math.min
     local max = math.max
-    local Core = { 0, 0, 5 }
-    local Interface
     Interface =
       {
-        GetCurValue =
-          function(Me)
-            return Me[1]
-          end,
-        SetCurValue =
-          function(Me, val)
-            Me[1] = val
-          end,
+        create = create,
         GetMinValue =
           function(Me)
             return Me[2]
@@ -763,26 +763,23 @@ package.preload['workshop.concepts.RangePoint'] =
           end,
         GetValue =
           function(Me)
-            local cur_value = Me:GetCurValue()
             local min_value = Me:GetMinValue()
             local max_value = Me:GetMaxValue()
-            return max(min(cur_value, max_value), min_value)
+            return min(max(Me[1], min_value), max_value)
           end,
         SetValue =
           function(Me, arg_value)
-            local cur_value
             local min_value = Me:GetMinValue()
             local max_value = Me:GetMaxValue()
-            cur_value = max(min(arg_value, max_value), min_value)
-            Me:SetCurValue(cur_value)
+            Me[1] = min(max(arg_value, min_value), max_value)
           end,
         IncBy =
           function(Me, value)
-            Me:SetCurValue(Me:GetCurValue() + value)
+            Me[1] = Me[1] + value
           end,
         DecBy =
           function(Me, value)
-            Me:SetCurValue(Me:GetCurValue() - value)
+            Me[1] = Me[1] - value
           end,
         Inc =
           function(Me)
@@ -791,10 +788,6 @@ package.preload['workshop.concepts.RangePoint'] =
         Dec =
           function(Me)
             Me:DecBy(1)
-          end,
-        create =
-          function(OptCore)
-            return create_instance(OptCore or Core, Interface)
           end,
       }
     return Interface
