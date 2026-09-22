@@ -1,17 +1,55 @@
 [![DeepWiki][DeepWiki_Logo]][DeepWiki_Repo] (sometimes AI explains it better)
 
-| Created |  Updated   |  Size   | License |
-|:-------:|:----------:|:-------:|:-------:|
-| 2017-05 | 2026-08-31 | < 60 K  |  LGPL3  |
+<table>
+  <tr>
+    <th colspan=3>Lua table serializer</th>
+  </tr>
+  <tr>
+    <td>
+      <table>
+        <tr>
+          <th>Updated</th>
+          <td>2026-08-31</td>
+        </tr>
+        <tr>
+          <th>Created</th>
+          <td>2017-05</td>
+        </tr>
+        <tr>
+          <th>Code size</th>
+          <td>&lt; 60 K</td>
+        </tr>
+        <tr>
+          <th>License</th>
+          <td>LGPL3</td>
+        </tr>
+      </table>
+    </td>
+    <td align=center>
+      Function to serialize data in Lua table to string with Lua code
+      that recreates this data.
+    </td>
+    <td>
+      <table>
+        <tr>
+          <th>Input</th>
+          <th>Output</th>
+        </tr>
+        <tr>
+          <td>
+            table
+          </td>
+          <td>
+            string with Lua code
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
 
-
-## What
-
-Function to serialize data in Lua table to string with Lua code
-that recreates this data.
-
-Lua tables can contain cross-references, so actually it's graph encoder
-to Lua source code.
+Lua tables can contain cross-references, so actually it's
+graph encoder to Lua source code.
 
 
 ## Scope
@@ -24,8 +62,20 @@ Nice output is secondary objective.
 
 ```lua
 t2s = require('serialize_lua_graph')
-print(t2s(_G))
+print(t2s(_G.math))
 ```
+
+Prints
+```lua
+return {
+  huge = 1/0,
+  maxinteger = 9223372036854775807,
+  mininteger = -9223372036854775808,
+  pi = 3.1415926535897931,
+};
+```
+
+Note that functions are not mentioned -- they can't be serialized.
 
 
 ## Encoding options
@@ -44,33 +94,78 @@ syntax elements will be present. Behavior flags are boolean fields.
 Example:
 
 ```lua
-local g2s = require('serialize_lua_graph')
-local Options = { style = 'readable_short', use_compact_sequences = false }
-local str = g2s(_G, Options)
-print(str)
+local t2s = require('serialize_lua_graph')
+local s = t2s(_G, { style = 'readable_short', use_compact_sequences = false })
+print(s)
 ```
 
-We'll demonstrate their effects on excerpt of `_G` table printout.
+We'll demonstrate their effects on excerpts of `_G` table printout.
 
+<table>
+  <thead>
+    <tr>
+      <th>Style</th>
+      <th>Output</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>minimal</code></td>
+      <td><pre><code>local T_1={};local T_2={};</code></pre></td>
+    </tr>
+    <tr>
+      <td><code>readable_short</code></td>
+      <td><pre><code>local T_1 = { };
+local T_2 = { };</code></pre></td>
+    </tr>
+    <tr>
+      <td><code>readable_long</code></td>
+      <td><pre><code>local T_4 = {
+  huge = 1/0,
+  maxinteger = 9223372036854775807,
+}</code></pre></td>
+    </tr>
+  </tbody>
+</table>
 
-| Style            | Output                                |
-|:-----------------|:--------------------------------------|
-| `minimal`        | `local T_1={};local T_2={};`          |
-| `readable_short` | `local T_1 = { };`                    |
-|                  | `local T_2 = { };`                    |
-| `readable_long`  | `local T_4 = {`                       |
-|                  | `  huge = 1/0,`                       |
-|                  | `  maxinteger = 9223372036854775807,` |
-
-
-| Behavior flag           | Output                 | Value |
-|:------------------------|:-----------------------|:-----:|
-| `use_compact_indices`   | `['coroutine'] = T_1,` |   ☐   |
-|                         | `coroutine = T_1,`     |   ☑   |
-| `use_compact_sequences` | `[1] = 'nil',`         |   ☐   |
-|                         | `'nil',`               |   ☑   |
-| `omit_tail_delimiter`   | `['utf8'] = T_8, };`   |   ☐   |
-|                         | `['utf8'] = T_8 };`    |   ☑   |
+<table>
+  <thead>
+    <tr>
+      <th>Behavior flag</th>
+      <th>Value</th>
+      <th>Output</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td rowspan="2"><code>use_compact_indices</code></td>
+      <td>☐</td>
+      <td><code>['coroutine'] = T_1,</code></td>
+    </tr>
+    <tr>
+      <td>☑</td>
+      <td><code>coroutine = T_1,</code></td>
+    </tr>
+    <tr>
+      <td rowspan="2"><code>use_compact_sequences</code></td>
+      <td>☐</td>
+      <td><code>[1] = 'nil',</code></td>
+    </tr>
+    <tr>
+      <td>☑</td>
+      <td><code>'nil',</code></td>
+    </tr>
+    <tr>
+      <td rowspan="2"><code>omit_tail_delimiter</code></td>
+      <td>☐</td>
+      <td><code>['utf8'] = T_8, };</code></td>
+    </tr>
+    <tr>
+      <td>☑</td>
+      <td><code>['utf8'] = T_8 };</code></td>
+    </tr>
+  </tbody>
+</table>
 
 
 ## Details/limitations
