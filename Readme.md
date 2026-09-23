@@ -9,7 +9,7 @@
       <table>
         <tr>
           <th>Updated</th>
-          <td>2026-08-31</td>
+          <td>2026-09-24</td>
         </tr>
         <tr>
           <th>Created</th>
@@ -67,12 +67,13 @@ print(t2s(_G.math))
 
 Prints
 ```lua
-return {
-  huge = 1/0,
-  maxinteger = 9223372036854775807,
-  mininteger = -9223372036854775808,
-  pi = 3.1415926535897931,
-};
+return
+  {
+    huge = 1/0,
+    maxinteger = 9223372036854775807,
+    mininteger = -9223372036854775808,
+    pi = 3.1415926535897931,
+  };
 ```
 
 Note that functions are not mentioned -- they can't be serialized.
@@ -120,10 +121,11 @@ local T_2 = { };</code></pre></td>
     </tr>
     <tr>
       <td><code>readable_long</code></td>
-      <td><pre><code>local T_4 = {
-  huge = 1/0,
-  maxinteger = 9223372036854775807,
-}</code></pre></td>
+      <td><pre><code>local T_4 =
+  {
+    huge = 1/0,
+    maxinteger = 9223372036854775807,
+  };</code></pre></td>
     </tr>
   </tbody>
 </table>
