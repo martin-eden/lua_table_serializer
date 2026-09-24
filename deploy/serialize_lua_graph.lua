@@ -5,162 +5,131 @@ package.preload['serialize_lua_graph'] =
   end
 package.preload['workshop.base'] =
   function(...)
-    local str_match = string.match
-    local str_find = string.find
-    local str_sub = string.sub
-    local tbl_pack = table.pack
-    local tbl_unpack = table.unpack
-    local require = require
-    local empty = ''
+    local set_base_prefix
+    local split_name
+    local get_base_prefix
+    local request
     local stack_init
-    local stack_get
     local stack_add
     local stack_remove
     do
-      local Names
-      local depth
-      stack_init =
-        function()
-          Names = {}
-          depth = 1
-        end
-      stack_get =
-        function()
-          return Names[depth]
-        end
-      stack_add =
-        function(prefix, name)
-          depth = depth + 1
-          Names[depth] = { prefix = prefix, name = name }
-        end
-      stack_remove =
-        function()
-          depth = depth - 1
-        end
-    end
-    local get_caller_prefix =
-      function()
-        local NameRec = stack_get()
-        if not NameRec then
-          return empty
-        end
-        return NameRec.prefix
+      local str_match = string.match
+      local str_find = string.find
+      local str_sub = string.sub
+      local tbl_pack = table.pack
+      local tbl_unpack = table.unpack
+      local require = require
+      local empty = ''
+      local stack_get
+      do
+        local Names
+        local depth
+        stack_init =
+          function()
+            Names = {}
+            depth = 1
+          end
+        stack_get =
+          function()
+            return Names[depth]
+          end
+        stack_add =
+          function(prefix, name)
+            depth = depth + 1
+            Names[depth] = { prefix = prefix, name = name }
+          end
+        stack_remove =
+          function()
+            depth = depth - 1
+          end
       end
-    local get_caller_name =
-      function()
-        local NameRec = stack_get()
-        if not NameRec then
-          return empty
+      local get_caller_prefix =
+        function()
+          local NameRec = stack_get()
+          if not NameRec then
+            return empty
+          end
+          return NameRec.prefix
         end
-        return NameRec.prefix .. NameRec.name
+      do
+        local prefix_name_capture = '^(.+%.)([^%.]+)$'
+        split_name =
+          function(qualified_name)
+            local prefix, name =
+              str_match(qualified_name, prefix_name_capture)
+            if not prefix then
+              prefix = empty
+              if str_find(qualified_name, '%.') then
+                name = empty
+              else
+                name = qualified_name
+              end
+            end
+            return prefix, name
+          end
       end
-    local split_name
-    do
-      local prefix_name_capture = '^(.+%.)([^%.]+)$'
-      split_name =
+      local apply_rel_prefix
+      do
+        local uplevel_capture = '(.+%.)[^%.]-%.$'
+        apply_rel_prefix =
+          function(base_prefix, rel_prefix)
+            while (str_sub(rel_prefix, 1, 2) == '^.') do
+              if (base_prefix == empty) then
+                error("Link is outside of caller's prefix.")
+              end
+              base_prefix =
+                str_match(base_prefix, uplevel_capture) or empty
+              rel_prefix = str_sub(rel_prefix, 3)
+            end
+            return base_prefix .. rel_prefix
+          end
+      end
+      do
+        local base_prefix
+        set_base_prefix =
+          function(arg_base_prefix)
+            base_prefix = arg_base_prefix
+          end
+        get_base_prefix =
+          function()
+            return base_prefix
+          end
+      end
+      local get_require_name =
         function(qualified_name)
-          local prefix, name =
-            str_match(qualified_name, prefix_name_capture)
-          if not prefix then
-            prefix = empty
-            if str_find(qualified_name, '%.') then
-              name = empty
-            else
-              name = qualified_name
-            end
+          local caller_prefix
+          local is_absolute_name =
+            (str_sub(qualified_name, 1, 2) == '!.')
+          if is_absolute_name then
+            qualified_name = str_sub(qualified_name, 3)
+            caller_prefix = get_base_prefix()
+          else
+            caller_prefix = get_caller_prefix()
           end
-          return prefix, name
+          local prefix, name = split_name(qualified_name)
+          prefix = apply_rel_prefix(caller_prefix, prefix)
+          return prefix .. name
+        end
+      request =
+        function(qualified_name)
+          local require_name = get_require_name(qualified_name)
+          stack_add(split_name(require_name))
+          local Results = tbl_pack(require(require_name))
+          stack_remove()
+          return tbl_unpack(Results)
         end
     end
-    local apply_rel_prefix
     do
-      local uplevel_capture = '(.+%.)[^%.]-%.$'
-      apply_rel_prefix =
-        function(base_prefix, rel_prefix)
-          while (str_sub(rel_prefix, 1, 2) == '^.') do
-            if (base_prefix == empty) then
-              error("Link is outside of caller's prefix.")
-            end
-            base_prefix =
-              str_match(base_prefix, uplevel_capture) or empty
-            rel_prefix = str_sub(rel_prefix, 3)
-          end
-          return base_prefix .. rel_prefix
-        end
-    end
-    local set_base_prefix
-    local get_base_prefix
-    do
-      local base_prefix
-      set_base_prefix =
-        function(arg_base_prefix)
-          base_prefix = arg_base_prefix
-        end
-      get_base_prefix =
-        function()
-          return base_prefix
-        end
-    end
-    local get_require_name =
-      function(qualified_name)
-        local caller_prefix
-        local is_absolute_name = (str_sub(qualified_name, 1, 2) == '!.')
-        if is_absolute_name then
-          qualified_name = str_sub(qualified_name, 3)
-          caller_prefix = get_base_prefix()
-        else
-          caller_prefix = get_caller_prefix()
-        end
-        local prefix, name = split_name(qualified_name)
-        prefix = apply_rel_prefix(caller_prefix, prefix)
-        return prefix .. name
-      end
-    local init_dependencies
-    local get_dependencies
-    local add_dependency
-    do
-      local Dependencies_Map
-      init_dependencies =
-        function()
-          Dependencies_Map = {}
-        end
-      get_dependencies =
-        function()
-          return Dependencies_Map
-        end
-      add_dependency =
-        function(src_name, dest_name)
-          Dependencies_Map[src_name] = Dependencies_Map[src_name] or {}
-          Dependencies_Map[src_name][dest_name] = true
-        end
-    end
-    local request =
-      function(qualified_name)
-        local require_name = get_require_name(qualified_name)
-        local src_name = get_caller_name()
-        stack_add(split_name(require_name))
-        local dest_name = get_caller_name()
-        add_dependency(src_name, dest_name)
-        local Results = tbl_pack(require(require_name))
-        stack_remove()
-        return tbl_unpack(Results)
-      end
-    do
-      if (_G.request == nil) then
-        local our_require_name = (...)
-        set_base_prefix(split_name(our_require_name))
-        init_dependencies()
-        _G.request = request
-        _G.get_require_name = get_require_name
-        _G.get_base_prefix = get_base_prefix
-        _G.get_dependencies = get_dependencies
-        stack_init()
-        stack_add(empty, our_require_name)
-        request('!.system.install_is_functions')()
-        request('!.system.install_assert_functions')()
-        _G.new = request('!.table.new')
-        stack_remove()
-      end
+      local our_require_name = (...)
+      set_base_prefix(split_name(our_require_name))
+      _G.request = request
+      _G.get_base_prefix = get_base_prefix
+      stack_init()
+      stack_add(empty, our_require_name)
+      request('!.system.install_is_functions')()
+      request('!.system.install_assert_functions')()
+      _G.new = request('!.table.new')
+      stack_remove()
     end
   end
 package.preload['workshop.system.install_is_functions'] =
@@ -474,20 +443,6 @@ package.preload['workshop.table.map_values'] =
         return Result
       end
   end
-package.preload['workshop.table.create_instance'] =
-  function(...)
-    local clone = request('clone')
-    local attach_methods = request('attach_methods')
-    return
-      function(Data, Methods)
-        assert_table(Data)
-        assert_table(Methods)
-        local Result
-        Result = clone(Data)
-        attach_methods(Result, Methods)
-        return Result
-      end
-  end
 package.preload['workshop.table.get_key_vals'] =
   function(...)
     local add_to_list = request('!.concepts.list.add_item')
@@ -680,115 +635,128 @@ package.preload['workshop.convert.table_to_str'] =
   end
 package.preload['workshop.concepts.Indent'] =
   function(...)
-    local create_instance = request('!.table.create_instance')
-    local RangePoint = request('!.concepts.RangePoint')
-    local str_rep = string.rep
-    local RangePoint = RangePoint.create()
-    RangePoint:SetMinValue(0)
-    RangePoint:SetMaxValue(60)
-    RangePoint:SetValue(RangePoint:GetMinValue())
-    local Core = { '  ', RangePoint }
+    local get_indent_chunk =
+      function(Me)
+        return Me[1]
+      end
+    local set_indent_chunk =
+      function(Me, str)
+        Me[1] = str
+      end
+    local get_indent_level =
+      function(Me)
+        return Me[2]:GetValue()
+      end
+    local set_indent_level =
+      function(Me, level)
+        Me[2]:SetValue(level)
+      end
+    local to_string
+    do
+      local str_rep = string.rep
+      to_string =
+        function(Me)
+          return str_rep(Me[1], Me[2]:GetValue())
+        end
+    end
+    local inc =
+      function(Me)
+        set_indent_level(Me, get_indent_level(Me) + 1)
+      end
+    local dec =
+      function(Me)
+        set_indent_level(Me, get_indent_level(Me) - 1)
+      end
     local Interface
+    local create
+    do
+      local RangePointClass = request('!.concepts.RangePoint')
+      local default_indent_chunk = '  '
+      local default_min_indent = 0
+      local default_max_indent = 60
+      local attach_methods = request('!.table.attach_methods')
+      create =
+        function(OptArg)
+          local min_indent = default_min_indent
+          local max_indent = default_max_indent
+          if OptArg then
+            min_indent = OptArg.min or min_indent
+            max_indent = OptArg.max or max_indent
+          end
+          local RangePoint = RangePointClass.create()
+          RangePoint:SetMinValue(min_indent)
+          RangePoint:SetMaxValue(max_indent)
+          RangePoint:SetValue(min_indent)
+          local Core = { default_indent_chunk, RangePoint }
+          attach_methods(Core, Interface)
+          return Core
+        end
+    end
     Interface =
       {
-        GetIndentChunk =
-          function(Me)
-            return Me[1]
-          end,
-        SetIndentChunk =
-          function(Me, str)
-            assert_string(str)
-            Me[1] = str
-          end,
-        GetRangePoint =
-          function(Me)
-            return Me[2]
-          end,
-        ToString =
-          function(Me)
-            local indent_level = Me:GetRangePoint():GetValue()
-            if (indent_level == 0) then
-              return ''
-            end
-            local indent_chunk = Me:GetIndentChunk()
-            return str_rep(indent_chunk, indent_level)
-          end,
-        Inc =
-          function(Me)
-            Me:GetRangePoint():Inc()
-          end,
-        Dec =
-          function(Me)
-            Me:GetRangePoint():Dec()
-          end,
-        create =
-          function(OptCore)
-            return create_instance(OptCore or Core, Interface)
-          end,
+        create = create,
+        GetIndentChunk = get_indent_chunk,
+        SetIndentChunk = set_indent_chunk,
+        GetIndentLevel = get_indent_level,
+        SetIndentLevel = set_indent_level,
+        ToString = to_string,
+        Inc = inc,
+        Dec = dec,
       }
     return Interface
   end
 package.preload['workshop.concepts.RangePoint'] =
   function(...)
+    local get_min_value =
+      function(Me)
+        return Me[2]
+      end
+    local set_min_value =
+      function(Me, val)
+        Me[2] = val
+      end
+    local get_max_value =
+      function(Me)
+        return Me[3]
+      end
+    local set_max_value =
+      function(Me, val)
+        Me[3] = val
+      end
+    local get_value
+    local set_value
+    do
+      local min = math.min
+      local max = math.max
+      get_value =
+        function(Me)
+          return min(max(Me[1], Me[2]), Me[3])
+        end
+      set_value =
+        function(Me, value)
+          Me[1] = min(max(value, Me[2]), Me[3])
+        end
+    end
     local Interface
     local create
     do
-      local DefaultCore = { 0, 0, 5 }
-      local create_instance = request('!.table.create_instance')
+      local attach_methods = request('!.table.attach_methods')
       create =
-        function(OptCore)
-          return create_instance(OptCore or DefaultCore, Interface)
+        function()
+          local Core = { 0, 0, 1 }
+          attach_methods(Core, Interface)
+          return Core
         end
     end
-    local min = math.min
-    local max = math.max
     Interface =
       {
         create = create,
-        GetMinValue =
-          function(Me)
-            return Me[2]
-          end,
-        SetMinValue =
-          function(Me, val)
-            Me[2] = val
-          end,
-        GetMaxValue =
-          function(Me)
-            return Me[3]
-          end,
-        SetMaxValue =
-          function(Me, val)
-            Me[3] = val
-          end,
-        GetValue =
-          function(Me)
-            local min_value = Me:GetMinValue()
-            local max_value = Me:GetMaxValue()
-            return min(max(Me[1], min_value), max_value)
-          end,
-        SetValue =
-          function(Me, arg_value)
-            local min_value = Me:GetMinValue()
-            local max_value = Me:GetMaxValue()
-            Me[1] = min(max(arg_value, min_value), max_value)
-          end,
-        IncBy =
-          function(Me, value)
-            Me[1] = Me[1] + value
-          end,
-        DecBy =
-          function(Me, value)
-            Me[1] = Me[1] - value
-          end,
-        Inc =
-          function(Me)
-            Me:IncBy(1)
-          end,
-        Dec =
-          function(Me)
-            Me:DecBy(1)
-          end,
+        GetMinValue = get_min_value,
+        SetMinValue = set_min_value,
+        GetMaxValue = get_max_value,
+        SetMaxValue = set_max_value,
+        GetValue = get_value,
+        SetValue = set_value,
       }
     return Interface
   end
@@ -1495,6 +1463,8 @@ package.preload[
           do
             local action_emit_space = false
             local action_emit_newline = false
+            local action_inc_indent = false
+            local action_dec_indent = false
             do
               action_emit_space =
                 action_emit_space or
@@ -1512,20 +1482,25 @@ package.preload[
                   action_emit_newline or
                   (prev_token == syntel_statement_separator)
               elseif (style == 'readable_long') then
-                if (next_token == syntel_start_table) then
-                  Indent:Inc()
-                elseif (next_token == syntel_end_table) then
-                  Indent:Dec()
-                end
+                action_inc_indent =
+                  action_inc_indent or
+                  (prev_token == syntel_start_table) or
+                  (next_token == syntel_start_table)
+                action_dec_indent =
+                  action_dec_indent or
+                  (prev_token == syntel_end_table) or
+                  (next_token == syntel_end_table)
                 local is_empty_table =
                   (prev_token == syntel_start_table) and
                   (next_token == syntel_end_table)
                 action_emit_space =
                   action_emit_space or
-                  (prev_token == syntel_assign) or
+                  (
+                    (prev_token == syntel_assign) and
+                    (next_token ~= syntel_start_table)
+                  ) or
                   (next_token == syntel_assign) or
-                  is_empty_table or
-                  (prev_token == syntel_return)
+                  is_empty_table
                 action_emit_newline =
                   action_emit_newline or
                   (
@@ -1536,12 +1511,22 @@ package.preload[
                     (next_token == syntel_end_table) and
                     not is_empty_table
                   ) or
+                  (
+                    (next_token == syntel_start_table) and
+                    not is_empty_table
+                  ) or
                   (prev_token == syntel_item_separator) or
                   (prev_token == syntel_statement_separator)
               end
             end
             if action_emit_space then
               Output:Write(space)
+            end
+            if action_inc_indent then
+              Indent:Inc()
+            end
+            if action_dec_indent then
+              Indent:Dec()
             end
             if action_emit_newline then
               Output:Write(newline)
