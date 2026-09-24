@@ -1,4 +1,4 @@
--- Load modules to get a list of all required Lua files
+-- Load modules, get list of all required Lua files, copy them
 
 --[[
   Author: Martin Eden
@@ -43,9 +43,10 @@ do
     add_to(FilesList, ModuleLoc[2])
   end
 end
---
-local create_deploy_script = request('!.system.create_deploy_script')
-create_deploy_script(FilesList)
+
+local deploy = request('!.mechs.deploy')
+
+deploy(FilesList)
 --
 
 --[[
