@@ -2,7 +2,7 @@
 
 --[[
   Author: Martin Eden
-  Last mod.: 2026-08-30
+  Last mod.: 2026-09-24
 ]]
 
 package.path = package.path .. ';../deploy/?.lua'
@@ -35,8 +35,6 @@ do
     Graph = { }
     Graph[{ Graph }] = { Graph }
   end
-
-  -- Graph = _G
 
   test(Graph)
 end
