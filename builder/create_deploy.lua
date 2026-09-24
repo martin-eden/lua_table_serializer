@@ -2,7 +2,7 @@
 
 --[[
   Author: Martin Eden
-  Last mod.: 2026-06-20
+  Last mod.: 2026-09-24
 ]]
 
 --[[
@@ -20,29 +20,36 @@
 
   Make sure that main Lua file executes without errors when
   loaded as module. If needed, make changes to it to behave so.
-
-  At loading via request() module dependencies are stored in
-  some global table. create_deploy_script() uses that table to
-  write Bash script which copies module files to local directory.
 ]]
 
+local Modules = { 'serialize_lua_graph' }
+
+--
 package.path = package.path .. ';../../../?.lua'
+--
+local ModulePaths
+do
+  local observe_modules = require('workshop.system.observe_modules')
+  ModulePaths = observe_modules(Modules)
+end
+--
 require('workshop.base')
 
+local FilesList
+do
+  local add_to = request('!.concepts.list.add_item')
+  FilesList = { }
+  for _, ModuleLoc in ipairs(ModulePaths) do
+    add_to(FilesList, ModuleLoc[2])
+  end
+end
+--
 local create_deploy_script = request('!.system.create_deploy_script')
-
-local ModulesList =
-  {
-    'workshop.base',
-    'serialize_lua_graph',
-  }
-
-create_deploy_script(ModulesList)
+create_deploy_script(FilesList)
+--
 
 --[[
   202?
-  2026-01-21
-  2026-04-23
-  2026-04-25
-  2026-06-01
+  2026 # # # #
+  2026-09-24
 ]]
