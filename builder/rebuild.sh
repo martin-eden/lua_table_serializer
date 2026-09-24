@@ -33,15 +33,12 @@ set -e -u
 
 cd ../src
 
-rm -rf workshop/
+rm -r workshop/
 
-lua ../builder/create_deploy.lua
-
-bash deploy.sh
-rm deploy.sh
+lua ../builder/deploy.lua
 
 mv deploy/workshop/ .
-rm -rf deploy/
+rm -r deploy/
 
 #
 # builder/
