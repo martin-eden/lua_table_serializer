@@ -214,6 +214,14 @@ local T_2 = { };</code></pre></td>
   and metatable and adding AST node to emit `setmetatable`.
 
 
+## Shipment
+
+  * Combined code in [`deploy/`][deploy_dir]
+  * Full source code in [`src/`][src]
+  * Build script and tools in [`builder/`][builder]
+  * Sample input and output in [`test/`][sample]
+
+
 ## Requirements
 
   * Lua 5.3 (or 5.4, 5.5)
@@ -221,7 +229,7 @@ local T_2 = { };</code></pre></td>
 
 ## Install/remove
 
-  * Save file `serialize_lua_graph.lua` from [`deploy/`][deploy]
+  * Save file `serialize_lua_graph.lua` from [`deploy/`][deploy_dir]
   * Place it to your Lua workplace for `require()`
 
 
@@ -235,9 +243,9 @@ local T_2 = { };</code></pre></td>
 
   * Clone [`workshop`][workshop] repo
   * Checkout it to date near "Updated" date from stats plate (at header of this Readme)
-  * Modify `package.path` in [`builder/create_deploy.lua`][create_deploy]
+  * Modify `package.path` in [`builder/deploy.lua`][deploy_script]
     so it can find your cloned `workshop` repo
-  * Run [`builder/rebuild.sh`][builder]
+  * Run [`builder/rebuild.sh`][rebuild]
 
 
 ## See also
@@ -255,10 +263,12 @@ local T_2 = { };</code></pre></td>
 [DeepWiki_Logo]: https://deepwiki.com/badge.svg
 [DeepWiki_Repo]: https://deepwiki.com/martin-eden/lua_table_serializer
 
-[deploy]: deploy/
+[deploy_dir]: deploy/
 [src]: src/
-[create_deploy]: builder/create_deploy.lua
 [builder]: builder/
+[sample]: test/
+[deploy_script]: builder/deploy.lua
+[rebuild]: builder/rebuild.sh
 
 [Ser]: https://github.com/gvx/Ser
 [workshop]: https://github.com/martin-eden/workshop
