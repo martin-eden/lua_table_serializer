@@ -555,21 +555,13 @@ package.preload['workshop.table.attach_methods'] =
       function(Object, Methods)
         assert_table(Object)
         assert_table(Methods)
-        local Metatable =
-          {
-            __index = Methods,
-            __newindex =
-              function()
-                error('Table is locked for additions/removals.')
-              end,
-          }
-        setmetatable(Object, Metatable)
+        setmetatable(Object, { __index = Methods })
       end
   end
 package.preload['workshop.table.ordered_pass.compare_values'] =
   function(...)
-    local TypeRank_Map = { ['number'] = 1, ['string'] = 2, other = 3 }
-    local ComparableTypes_Map = { ['number'] = true, ['string'] = true }
+    local TypeRank_Map = { ['string'] = 1, ['number'] = 2, other = 3 }
+    local ComparableTypes_Map = { ['string'] = true, ['number'] = true }
     return
       function(a, b)
         local type_a = type(a)
@@ -651,6 +643,14 @@ package.preload['workshop.concepts.Indent'] =
       function(Me, level)
         Me[2]:SetValue(level)
       end
+    local get_max_indent_level =
+      function(Me)
+        return Me[2]:GetMaxValue()
+      end
+    local set_max_indent_level =
+      function(Me, level)
+        Me[2]:SetMaxValue(level)
+      end
     local to_string
     do
       local str_rep = string.rep
@@ -671,23 +671,17 @@ package.preload['workshop.concepts.Indent'] =
     local create
     do
       local RangePointClass = request('!.concepts.RangePoint')
-      local default_indent_chunk = '  '
-      local default_min_indent = 0
-      local default_max_indent = 60
+      local min_indent = 0
+      local max_indent = 60
+      local indent_chunk = '  '
       local attach_methods = request('!.table.attach_methods')
       create =
-        function(OptArg)
-          local min_indent = default_min_indent
-          local max_indent = default_max_indent
-          if OptArg then
-            min_indent = OptArg.min or min_indent
-            max_indent = OptArg.max or max_indent
-          end
+        function()
           local RangePoint = RangePointClass.create()
           RangePoint:SetMinValue(min_indent)
           RangePoint:SetMaxValue(max_indent)
           RangePoint:SetValue(min_indent)
-          local Core = { default_indent_chunk, RangePoint }
+          local Core = { indent_chunk, RangePoint }
           attach_methods(Core, Interface)
           return Core
         end
@@ -699,6 +693,8 @@ package.preload['workshop.concepts.Indent'] =
         SetIndentChunk = set_indent_chunk,
         GetIndentLevel = get_indent_level,
         SetIndentLevel = set_indent_level,
+        GetMaxIndentLevel = get_max_indent_level,
+        SetMaxIndentLevel = set_max_indent_level,
         ToString = to_string,
         Inc = inc,
         Dec = dec,
@@ -757,6 +753,51 @@ package.preload['workshop.concepts.RangePoint'] =
         SetMaxValue = set_max_value,
         GetValue = get_value,
         SetValue = set_value,
+      }
+    return Interface
+  end
+package.preload['workshop.concepts.PaddingPrinter'] =
+  function(...)
+    local inc_indent =
+      function(Me)
+        Me[1]:Inc()
+      end
+    local dec_indent =
+      function(Me)
+        Me[1]:Dec()
+      end
+    local newline
+    do
+      local newline_char = request('!.concepts.Ascii.Chars').newline
+      newline =
+        function(Me)
+          Me[2]:Write(newline_char)
+          Me[2]:Write(Me[1]:ToString())
+        end
+    end
+    local write =
+      function(Me, str)
+        Me[2]:Write(str)
+      end
+    local Interface
+    local create
+    do
+      local IndentClass = request('!.concepts.Indent')
+      local attach_methods = request('!.table.attach_methods')
+      create =
+        function(Output)
+          local Me = { IndentClass.create(), Output }
+          attach_methods(Me, Interface)
+          return Me
+        end
+    end
+    Interface =
+      {
+        create = create,
+        IncIndent = inc_indent,
+        DecIndent = dec_indent,
+        Newline = newline,
+        Write = write,
       }
     return Interface
   end
@@ -889,7 +930,6 @@ package.preload['workshop.concepts.lua.QuoteChars'] =
   end
 package.preload['workshop.concepts.lua.quote_string'] =
   function(...)
-    local newline_code = request('!.concepts.Ascii.Codes').newline
     local BinaryEntitiesLengths_Map =
       { [1] = true, [2] = true, [4] = true, [8] = true }
     local single_quote_code
@@ -914,7 +954,7 @@ package.preload['workshop.concepts.lua.quote_string'] =
       has_messy_control_chars =
         function(UsedChars)
           for code in pairs(UsedChars) do
-            if is_control_code(code) and (code ~= newline_code) then
+            if is_control_code(code) then
               return true
             end
           end
@@ -941,7 +981,6 @@ package.preload['workshop.concepts.lua.quote_string'] =
         local str_has_messy_control_chars =
           has_messy_control_chars(UsedChars_Map)
         local str_has_messy_printable_chars =
-          UsedChars_Map[newline_code] or
           UsedChars_Map[backslash_code] or
           (
             UsedChars_Map[single_quote_code] and
@@ -1238,11 +1277,14 @@ package.preload[
                 )
               if skip_key_serialization then
                 next_integer_key = key_value + 1
+                serialize_value(Settings, Value)
               else
                 serialize_index(Settings, Key)
                 Output:Write(assign)
+                Output:IncIndent()
+                serialize_value(Settings, Value)
+                Output:DecIndent()
               end
-              serialize_value(Settings, Value)
               wrote_something = true
               ::next::
             end
@@ -1406,7 +1448,14 @@ package.preload[
   'workshop.concepts.codec_lua_graph.compile.TokensOutputStream'
 ] =
   function(...)
-    local empty = ''
+    local inc_indent =
+      function(Me)
+        Me[3]:IncIndent()
+      end
+    local dec_indent =
+      function(Me)
+        Me[3]:DecIndent()
+      end
     local Syntels = request('Syntels')
     local write
     do
@@ -1419,7 +1468,7 @@ package.preload[
         local is_alnum = request('!.concepts.Ascii.is_alnum')
         is_syntax_clash =
           function(prev_token, next_token)
-            if (prev_token == empty) then
+            if (prev_token == '') then
               return false
             end
             if
@@ -1456,15 +1505,14 @@ package.preload[
       end
       write =
         function(Me, next_token)
-          local Output = Me.Output
-          local prev_token = Me.prev_token
-          local style = Me.style
-          local Indent = Me.Indent
+          local style = Me[1]
+          local prev_token = Me[2]
+          local Printer = Me[3]
           do
-            local action_emit_space = false
-            local action_emit_newline = false
             local action_inc_indent = false
             local action_dec_indent = false
+            local action_emit_space = false
+            local action_emit_newline = false
             do
               action_emit_space =
                 action_emit_space or
@@ -1479,17 +1527,10 @@ package.preload[
                   (prev_token == syntel_item_separator) or
                   (prev_token == syntel_return)
                 action_emit_newline =
-                  action_emit_newline or
                   (prev_token == syntel_statement_separator)
               elseif (style == 'readable_long') then
-                action_inc_indent =
-                  action_inc_indent or
-                  (prev_token == syntel_start_table) or
-                  (next_token == syntel_start_table)
-                action_dec_indent =
-                  action_dec_indent or
-                  (prev_token == syntel_end_table) or
-                  (next_token == syntel_end_table)
+                action_inc_indent = (prev_token == syntel_start_table)
+                action_dec_indent = (next_token == syntel_end_table)
                 local is_empty_table =
                   (prev_token == syntel_start_table) and
                   (next_token == syntel_end_table)
@@ -1519,46 +1560,46 @@ package.preload[
                   (prev_token == syntel_statement_separator)
               end
             end
-            if action_emit_space then
-              Output:Write(space)
-            end
             if action_inc_indent then
-              Indent:Inc()
+              inc_indent(Me)
             end
             if action_dec_indent then
-              Indent:Dec()
+              dec_indent(Me)
+            end
+            if action_emit_space then
+              Printer:Write(space)
             end
             if action_emit_newline then
-              Output:Write(newline)
-              Output:Write(Indent:ToString())
+              Printer:Newline()
             end
           end
-          Output:Write(next_token)
-          Me.prev_token = next_token
+          Printer:Write(next_token)
+          Me[2] = next_token
         end
     end
     local Interface
     do
       local create
       do
-        local IndentClass = request('!.concepts.Indent')
+        local PaddingPrinter = request('!.concepts.PaddingPrinter')
         local attach_methods = request('!.table.attach_methods')
         create =
           function(BaseOutputStream, style)
             assert_table(BaseOutputStream)
             assert_string(style)
-            local Core =
-              {
-                Output = BaseOutputStream,
-                prev_token = empty,
-                style = style,
-                Indent = IndentClass.create(),
-              }
-            attach_methods(Core, Interface)
-            return Core
+            local Me =
+              { style, '', PaddingPrinter.create(BaseOutputStream) }
+            attach_methods(Me, Interface)
+            return Me
           end
       end
-      Interface = { create = create, Write = write }
+      Interface =
+        {
+          create = create,
+          Write = write,
+          IncIndent = inc_indent,
+          DecIndent = dec_indent,
+        }
     end
     return Interface
   end
@@ -1627,7 +1668,9 @@ package.preload[
               Output:Write(kw_local)
               Output:Write(name)
               Output:Write(assign)
+              Output:IncIndent()
               serialize_value(Settings, Value)
+              Output:DecIndent()
             elseif (rec_type == type_assignment) then
               local dest_name = Rec[2]
               local Index = Rec[3]
@@ -1635,11 +1678,15 @@ package.preload[
               Output:Write(dest_name)
               serialize_index(Settings, Index)
               Output:Write(assign)
+              Output:IncIndent()
               Output:Write(src_name)
+              Output:DecIndent()
             elseif (rec_type == type_return) then
               local Value = Rec[2]
               Output:Write(kw_return)
+              Output:IncIndent()
               serialize_value(Settings, Value)
+              Output:DecIndent()
             end
             Output:Write(statement_separator)
           end
@@ -1840,20 +1887,36 @@ package.preload['workshop.concepts.Ascii.is_control_code'] =
   end
 package.preload['workshop.concepts.StreamIo.Output.String'] =
   function(...)
-    local list_to_string = request('!.concepts.list.to_string')
-    local list_add_item = request('!.concepts.list.add_item')
-    return
-      {
-        GetString =
-          function(Me)
-            return list_to_string(Me.Chunks)
-          end,
-        Write =
-          function(Me, data_str)
-            assert_string(data_str)
-            list_add_item(Me.Chunks, data_str)
-          end,
-        Chunks = {},
-      }
+    local write
+    do
+      local add_to = request('!.concepts.list.add_item')
+      write =
+        function(Me, data_str)
+          assert_string(data_str)
+          add_to(Me, data_str)
+        end
+    end
+    local get_string
+    do
+      local list_to_string = request('!.concepts.list.to_string')
+      get_string =
+        function(Me)
+          return list_to_string(Me)
+        end
+    end
+    local Interface
+    local create
+    do
+      local attach_methods = request('!.table.attach_methods')
+      create =
+        function()
+          local Me = {}
+          attach_methods(Me, Interface)
+          return Me
+        end
+    end
+    Interface =
+      { create = create, Write = write, GetString = get_string }
+    return create()
   end
 return require('serialize_lua_graph')
