@@ -2,7 +2,7 @@
 
 --[[
   Author: Martin Eden
-  Last mod.: 2026-09-24
+  Last mod.: 2026-10-20
 ]]
 
 --[[
@@ -16,12 +16,9 @@
 --[[
   Storage format
 
-  Table with named values:
-
-    [t] Output -- output stream
-    [s] prev_token -- previous token
-    [s] style -- formatting style name
-    [t] Indent -- line indent instance
+    1 [s] formatting style name
+    2 [s] previous token
+    3 [t] padding printer instance
 ]]
 
 --[=[
@@ -32,7 +29,39 @@
   This module handles this.
 ]=]
 
-local empty = ''
+--[[
+  Original idea was to make interface same as for output stream
+
+  So just Write() method.
+
+  Small caveat is that you have to pass to Write() strings that
+  are tokens: no spaces. That was natural.
+
+  Problem arouse with indentation. We want to indent key-values as
+
+    a =
+      { },
+
+  and just values (implicit key) as
+
+    { },
+
+  So indentation increases for "value" part only for key-value case.
+
+  This can't be naturally coded. So we're exposing indentation methods.
+  And thinking about abandoning that "jsut like output stream" idea.
+]]
+
+local inc_indent =
+  function(Me)
+    Me[3]:IncIndent()
+  end
+
+local dec_indent =
+  function(Me)
+    Me[3]:DecIndent()
+  end
+
 local Syntels = request('Syntels')
 
 local write
@@ -47,7 +76,7 @@ do
 
     is_syntax_clash =
       function(prev_token, next_token)
-        if (prev_token == empty) then
+        if (prev_token == '') then
           return false
         end
 
@@ -90,17 +119,16 @@ do
 
   write =
     function(Me, next_token)
-      local Output = Me.Output
-      local prev_token = Me.prev_token
-      local style = Me.style
-      local Indent = Me.Indent
+      local style = Me[1]
+      local prev_token = Me[2]
+      local Printer = Me[3]
 
       -- Write whitespaces
       do
-        local action_emit_space = false
-        local action_emit_newline = false
         local action_inc_indent = false
         local action_dec_indent = false
+        local action_emit_space = false
+        local action_emit_newline = false
 
         do
           action_emit_space =
@@ -117,17 +145,10 @@ do
               (prev_token == syntel_item_separator) or
               (prev_token == syntel_return)
             action_emit_newline =
-              action_emit_newline or
               (prev_token == syntel_statement_separator)
           elseif (style == 'readable_long') then
-            action_inc_indent =
-              action_inc_indent or
-              (prev_token == syntel_start_table) or
-              (next_token == syntel_start_table)
-            action_dec_indent =
-              action_dec_indent or
-              (prev_token == syntel_end_table) or
-              (next_token == syntel_end_table)
+            action_inc_indent = (prev_token == syntel_start_table)
+            action_dec_indent = (next_token == syntel_end_table)
             local is_empty_table =
               (prev_token == syntel_start_table) and
               (next_token == syntel_end_table)
@@ -158,25 +179,24 @@ do
           end
         end
 
-        if action_emit_space then
-          Output:Write(space)
-        end
         if action_inc_indent then
-          Indent:Inc()
+          inc_indent(Me)
         end
         if action_dec_indent then
-          Indent:Dec()
+          dec_indent(Me)
+        end
+        if action_emit_space then
+          Printer:Write(space)
         end
         if action_emit_newline then
-          Output:Write(newline)
-          Output:Write(Indent:ToString())
+          Printer:Newline()
         end
       end
 
       -- Write token
-      Output:Write(next_token)
+      Printer:Write(next_token)
 
-      Me.prev_token = next_token
+      Me[2] = next_token
     end
 end
 
@@ -184,7 +204,7 @@ local Interface
 do
   local create
   do
-    local IndentClass = request('!.concepts.Indent')
+    local PaddingPrinter = request('!.concepts.PaddingPrinter')
     local attach_methods = request('!.table.attach_methods')
 
     create =
@@ -192,17 +212,15 @@ do
         assert_table(BaseOutputStream)
         assert_string(style)
 
-        local Core =
+        local Me =
           {
-            Output = BaseOutputStream,
-            prev_token = empty,
-            style = style,
-            Indent = IndentClass.create(),
+            style,
+            '',
+            PaddingPrinter.create(BaseOutputStream),
           }
+        attach_methods(Me, Interface)
 
-        attach_methods(Core, Interface)
-
-        return Core
+        return Me
       end
   end
 
@@ -210,6 +228,8 @@ do
     {
       create = create,
       Write = write,
+      IncIndent = inc_indent,
+      DecIndent = dec_indent,
     }
 end
 
@@ -217,6 +237,6 @@ end
 return Interface
 
 --[[
-  2026 # # #
-  2026-09-24
+  2026 # # # #
+  2026-10-20
 ]]
