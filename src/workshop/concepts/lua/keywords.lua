@@ -1,11 +1,10 @@
--- List of Lua keywords
+-- List of Lua 5.5 keywords
 
 --[[
   Author: Martin Eden
-  Last mod.: 2026-08-28
+  Last mod.: 2026-11-12
 ]]
 
--- Export:
 return
   {
     'nil',
@@ -18,6 +17,7 @@ return
     'or',
 
     'local',
+    'global',
 
     'do',
     'end',
@@ -44,6 +44,7 @@ return
   }
 
 --[[
-  2016
-  2026-06-18
+  2016 #
+  2026 #
+  2026-10-28
 ]]
