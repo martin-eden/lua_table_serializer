@@ -4,7 +4,7 @@
 
 #
 # Author: Martin Eden
-# Last mod.: 2026-08-21
+# Last mod.: 2026-11-13
 #
 
 #
@@ -33,8 +33,7 @@ set -e -u
 
 cd ../src
 
-rm -r workshop/
-
+rm -r -f workshop/
 lua ../builder/deploy.lua
 
 mv deploy/workshop/ .
@@ -53,7 +52,6 @@ cd ../builder
 ./reformat_lua \
   ../deploy/serialize_lua_graph.melded.lua \
   ../deploy/serialize_lua_graph.melded.stripped.lua \
-  --~keep-comments \
   --right-margin=72
 rm ../deploy/serialize_lua_graph.melded.lua
 
