@@ -2,7 +2,7 @@
 
 --[[
   Author: Martin Eden
-  Last mod.: 2026-09-24
+  Last mod.: 2026-11-04
 ]]
 
 package.path = package.path .. ';../deploy/?.lua'
@@ -22,8 +22,7 @@ do
     }
   test =
     function(Graph)
-      io.stdout:write(g2s(Graph, Options))
-      io.stdout:write('\n')
+      io.stdout:write(g2s(Graph, Options), '\n')
     end
 end
 
