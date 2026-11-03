@@ -22,21 +22,21 @@ package.preload['workshop.base'] =
       local empty = ''
       local stack_get
       do
-        local Names
+        local names
         local depth
         stack_init =
           function()
-            Names = {}
+            names = { }
             depth = 1
           end
         stack_get =
           function()
-            return Names[depth]
+            return names[depth]
           end
         stack_add =
           function(prefix, name)
             depth = depth + 1
-            Names[depth] = { prefix = prefix, name = name }
+            names[depth] = { prefix = prefix, name = name }
           end
         stack_remove =
           function()
@@ -45,11 +45,11 @@ package.preload['workshop.base'] =
       end
       local get_caller_prefix =
         function()
-          local NameRec = stack_get()
-          if not NameRec then
+          local name_rec = stack_get()
+          if not name_rec then
             return empty
           end
-          return NameRec.prefix
+          return name_rec.prefix
         end
       do
         local prefix_name_capture = '^(.+%.)([^%.]+)$'
@@ -114,21 +114,21 @@ package.preload['workshop.base'] =
         function(qualified_name)
           local require_name = get_require_name(qualified_name)
           stack_add(split_name(require_name))
-          local Results = tbl_pack(require(require_name))
+          local results = tbl_pack(require(require_name))
           stack_remove()
-          return tbl_unpack(Results)
+          return tbl_unpack(results)
         end
     end
     do
       local our_require_name = (...)
       set_base_prefix(split_name(our_require_name))
-      _G.request = request
-      _G.get_base_prefix = get_base_prefix
+      _G['request'] = request
+      _G['get_base_prefix'] = get_base_prefix
       stack_init()
       stack_add(empty, our_require_name)
       request('!.system.install_is_functions')()
       request('!.system.install_assert_functions')()
-      _G.new = request('!.table.new')
+      _G['new'] = request('!.table.new')
       stack_remove()
     end
   end
@@ -155,14 +155,15 @@ package.preload['workshop.system.install_is_functions'] =
             end
         end
     end
-    local TypeNames = request('!.concepts.lua.TypeNames')
-    local NumberTypeNames = request('!.concepts.lua.NumberTypeNames')
+    local type_names = request('!.concepts.lua.type_names')
+    local number_type_names =
+      request('!.concepts.lua.number_type_names')
     return
       function()
-        for _, type_name in ipairs(TypeNames) do
+        for _, type_name in ipairs(type_names) do
           _G['is_' .. type_name] = type_is(type_name)
         end
-        for _, number_type_name in ipairs(NumberTypeNames) do
+        for _, number_type_name in ipairs(number_type_names) do
           _G['is_' .. number_type_name] = number_is(number_type_name)
         end
       end
@@ -186,14 +187,15 @@ package.preload['workshop.system.install_assert_functions'] =
             end
         end
     end
-    local TypeNames = request('!.concepts.lua.TypeNames')
-    local NumberTypeNames = request('!.concepts.lua.NumberTypeNames')
+    local type_names = request('!.concepts.lua.type_names')
+    local number_type_names =
+      request('!.concepts.lua.number_type_names')
     local install_assert_funcs =
       function()
-        for _, type_name in ipairs(TypeNames) do
+        for _, type_name in ipairs(type_names) do
           _G['assert_' .. type_name] = spawn_assert_func(type_name)
         end
-        for _, number_type_name in ipairs(NumberTypeNames) do
+        for _, number_type_name in ipairs(number_type_names) do
           _G['assert_' .. number_type_name] =
             spawn_assert_func(number_type_name)
         end
@@ -212,7 +214,7 @@ package.preload['workshop.mechs.name_giver'] =
     local str_format = string.format
     return
       {
-        Names = {},
+        Names = { },
         Counters =
           {
             ['function'] = 0,
@@ -247,14 +249,16 @@ package.preload['workshop.mechs.graph.dfs'] =
 package.preload['workshop.mechs.graph.assembly_order'] =
   function(...)
     local dfs = request('dfs')
+    local add_to_list = request('!.concepts.list.add_item')
     return
       function(graph, options)
-        options = options or {}
-        local assembly_order_seq = {}
-        options.handle_leave =
-          function(node, node_rec, deep)
-            assembly_order_seq[#assembly_order_seq + 1] = node
+        local assembly_order_seq = { }
+        local handle_leave =
+          function(node)
+            add_to_list(assembly_order_seq, node)
           end
+        options = options or { }
+        options.handle_leave = handle_leave
         local node_recs = dfs(graph, options)
         return node_recs, assembly_order_seq
       end
@@ -266,31 +270,31 @@ package.preload['workshop.mechs.graph.dfs.get_children'] =
     local compare_keys = request('!.table.ordered_pass.compare_keys')
     local tbl_sort = table.sort
     return
-      function(Me, Node)
-        local also_visit_keys = Me.also_visit_keys
-        local KeyVals = get_key_vals(Node)
-        local Result = {}
-        for _, Rec in ipairs(KeyVals) do
-          if is_table(Rec.value) then
-            add_to_list(Result, Rec)
+      function(me, node)
+        local also_visit_keys = me.also_visit_keys
+        local key_vals = get_key_vals(node)
+        local result = { }
+        for _, rec in ipairs(key_vals) do
+          if is_table(rec.value) then
+            add_to_list(result, rec)
           end
-          if also_visit_keys and is_table(Rec.key) then
-            add_to_list(Result, { key = Rec.key, value = Rec.key })
+          if also_visit_keys and is_table(rec.key) then
+            add_to_list(result, { key = rec.key, value = rec.key })
           end
         end
-        tbl_sort(Result, compare_keys)
-        return Result
+        tbl_sort(result, compare_keys)
+        return result
       end
   end
 package.preload['workshop.mechs.graph.dfs.dfs'] =
   function(...)
     return
-      function(self, graph)
-        self.nodes_status = {}
-        local handle_discovery = self.handle_discovery
-        local handle_leave = self.handle_leave
-        local nodes_status = self.nodes_status
-        local get_children = self.get_children
+      function(me, graph)
+        me.nodes_status = { }
+        local handle_discovery = me.handle_discovery
+        local handle_leave = me.handle_leave
+        local nodes_status = me.nodes_status
+        local get_children = me.get_children
         local init_node_rec =
           function(node)
             nodes_status[node] = nodes_status[node] or { node = node }
@@ -301,8 +305,8 @@ package.preload['workshop.mechs.graph.dfs.dfs'] =
           function(parent, parent_key, node, depth)
             init_node_rec(node)
             local node_rec = nodes_status[node]
-            node_rec.refs = node_rec.refs or {}
-            node_rec.refs[parent] = node_rec.refs[parent] or {}
+            node_rec.refs = node_rec.refs or { }
+            node_rec.refs[parent] = node_rec.refs[parent] or { }
             node_rec.refs[parent][parent_key] = true
             if not node_rec.color then
               node_rec.parent = parent
@@ -320,7 +324,7 @@ package.preload['workshop.mechs.graph.dfs.dfs'] =
             node_rec.discovery_time = time
             node_rec.color = 'gray'
             handle_discovery(node, node_rec, depth)
-            for _, child in ipairs(self:get_children(node)) do
+            for _, child in ipairs(me:get_children(node)) do
               process(node, child.key, child.value, depth)
             end
             time = time + 1
@@ -345,7 +349,7 @@ package.preload['workshop.mechs.graph.dfs.interface'] =
         also_visit_keys = false,
         table_iterator = request('!.table.ordered_pass'),
         run = request('dfs'),
-        nodes_status = {},
+        nodes_status = { },
       }
   end
 package.preload['workshop.number.is_neg_inf'] =
@@ -353,6 +357,19 @@ package.preload['workshop.number.is_neg_inf'] =
     return
       function(n)
         return (n == -1 / 0)
+      end
+  end
+package.preload['workshop.number.constrain'] =
+  function(...)
+    return
+      function(num, min, max)
+        if (num < min) then
+          return min
+        end
+        if (num > max) then
+          return max
+        end
+        return num
       end
   end
 package.preload['workshop.number.is_pos_inf'] =
@@ -372,28 +389,28 @@ package.preload['workshop.number.is_nan'] =
 package.preload['workshop.table.clone'] =
   function(...)
     return
-      function(Node)
+      function(node)
         local clone
         do
-          local Cloned = {}
+          local cloned = { }
           clone =
-            function(Node)
-              if (type(Node) ~= 'table') then
-                return Node
+            function(node)
+              if (type(node) ~= 'table') then
+                return node
               end
-              if Cloned[Node] then
-                return Cloned[Node]
+              if cloned[node] then
+                return cloned[node]
               end
-              local Result = {}
-              Cloned[Node] = Result
-              for key, value in pairs(Node) do
-                Result[clone(key)] = clone(value)
+              local result = { }
+              cloned[node] = result
+              for key, value in pairs(node) do
+                result[clone(key)] = clone(value)
               end
-              setmetatable(Result, getmetatable(Node))
-              return Result
+              setmetatable(result, getmetatable(node))
+              return result
             end
         end
-        return clone(Node)
+        return clone(node)
       end
   end
 package.preload['workshop.table.new'] =
@@ -401,129 +418,115 @@ package.preload['workshop.table.new'] =
     local clone = request('clone')
     local patch = request('patch')
     return
-      function(Base, Overrides)
-        assert_table(Base)
-        local Result = clone(Base)
-        if is_table(Overrides) then
-          patch(Result, Overrides)
+      function(base, overrides)
+        assert_table(base)
+        local result = clone(base)
+        if overrides then
+          patch(result, overrides)
         end
-        return Result
+        return result
       end
   end
 package.preload['workshop.table.patch'] =
   function(...)
-    local Rules = { { has_a = true, has_b = true, action = 'replace' } }
+    local rule = { true, true, 'replace' }
     local apply_table = request('apply_table')
     return
-      function(Result, Additions)
-        apply_table(Result, Additions, Rules)
+      function(result, patch)
+        apply_table(result, patch, rule)
       end
   end
 package.preload['workshop.table.invert'] =
   function(...)
     return
-      function(Table)
-        assert_table(Table)
-        local Result = {}
-        for Key, Value in pairs(Table) do
-          Result[Value] = Key
+      function(table)
+        local result = { }
+        for key, val in pairs(table) do
+          result[val] = key
         end
-        return Result
+        return result
       end
   end
 package.preload['workshop.table.map_values'] =
   function(...)
     return
-      function(List)
-        assert_table(List)
-        local Result = {}
-        for _, value in pairs(List) do
-          Result[value] = true
+      function(table)
+        assert_table(table)
+        local map = { }
+        for _, value in pairs(table) do
+          map[value] = true
         end
-        return Result
+        return map
       end
   end
 package.preload['workshop.table.get_key_vals'] =
   function(...)
     local add_to_list = request('!.concepts.list.add_item')
     return
-      function(Table)
-        assert_table(Table)
-        local KeyVals = {}
-        for key, value in pairs(Table) do
-          add_to_list(KeyVals, { key = key, value = value })
+      function(table)
+        assert_table(table)
+        local key_vals = { }
+        for key, value in pairs(table) do
+          add_to_list(key_vals, { key = key, value = value })
         end
-        return KeyVals
+        return key_vals
       end
   end
 package.preload['workshop.table.apply_table'] =
   function(...)
-    local keep_str = 'keep'
     local replace_str = 'replace'
     local remove_str = 'remove'
-    local get_action =
-      function(has_a, has_b, Rules)
-        for _, Rule in ipairs(Rules) do
-          if (Rule.has_a == has_a) and (Rule.has_b == has_b) then
-            return Rule.action
-          end
+    local assert_rule =
+      function(rule)
+        local action = rule[3]
+        if
+          is_boolean(rule[1]) and
+          is_boolean(rule[2]) and
+          ((action == replace_str) or (action == remove_str))
+        then
+          return
         end
-        return keep_str
+        error('Unsupported rule.')
       end
     local apply_table
     apply_table =
-      function(A, B, Rules)
-        local Keys = {}
+      function(a, b, rule)
+        local keys = { }
         do
-          for a_key in pairs(A) do
-            Keys[a_key] = true
+          for a_key in pairs(a) do
+            keys[a_key] = true
           end
-          for b_key in pairs(B) do
-            Keys[b_key] = true
+          for b_key in pairs(b) do
+            keys[b_key] = true
           end
         end
-        for key in pairs(Keys) do
-          local a_key = A[key]
-          local b_key = B[key]
+        for key in pairs(keys) do
+          local a_key = a[key]
+          local b_key = b[key]
           if is_table(a_key) and is_table(b_key) then
-            apply_table(a_key, b_key, Rules)
+            apply_table(a_key, b_key, rule)
           else
             local has_a = not is_nil(a_key)
             local has_b = not is_nil(b_key)
-            local action = get_action(has_a, has_b, Rules)
-            if (action == keep_str) then
-              ;
-            elseif (action == replace_str) then
-              A[key] = B[key]
+            local action
+            if (rule[1] == has_a) and (rule[2] == has_b) then
+              action = rule[3]
+            end
+            if (action == replace_str) then
+              a[key] = b[key]
             elseif (action == remove_str) then
-              A[key] = nil
+              a[key] = nil
             end
           end
         end
       end
-    local check_rule =
-      function(Rule)
-        local has_a = is_boolean(Rule.has_a)
-        local has_b = is_boolean(Rule.has_b)
-        local action = Rule.action
-        local is_known_action =
-          (action == keep_str) or
-          (action == replace_str) or
-          (action == remove_str)
-        return has_a and has_b and is_known_action
-      end
     return
-      function(A, B, Rules)
-        assert_table(A)
-        assert_table(B)
-        assert_table(Rules)
-        assert(A ~= B)
-        for index, Rule in ipairs(Rules) do
-          if not check_rule(Rule) then
-            error('Unsupported rule.')
-          end
-        end
-        apply_table(A, B, Rules)
+      function(a, b, rule)
+        assert_table(a)
+        assert_table(b)
+        assert_table(rule)
+        assert_rule(rule)
+        apply_table(a, b, rule)
       end
   end
 package.preload['workshop.table.ordered_pass'] =
@@ -532,47 +535,48 @@ package.preload['workshop.table.ordered_pass'] =
     local get_key_vals = request('get_key_vals')
     local tbl_sort = table.sort
     return
-      function(Table, comparator)
-        assert_table(Table)
+      function(table, comparator)
+        assert_table(table)
         comparator = comparator or keys_comparator
         assert_function(comparator)
-        local KeyVals = get_key_vals(Table)
-        tbl_sort(KeyVals, comparator)
+        local key_vals = get_key_vals(table)
+        tbl_sort(key_vals, comparator)
         local i = 0
         local get_next =
           function()
             i = i + 1
-            if KeyVals[i] then
-              return KeyVals[i].key, KeyVals[i].value
+            local rec = key_vals[i]
+            if not rec then
+              return
             end
+            return rec.key, rec.value
           end
-        return get_next, Table
+        return get_next, table
       end
   end
 package.preload['workshop.table.attach_methods'] =
   function(...)
     return
-      function(Object, Methods)
-        assert_table(Object)
-        assert_table(Methods)
-        setmetatable(Object, { __index = Methods })
+      function(me, methods)
+        setmetatable(me, { __index = methods })
       end
   end
 package.preload['workshop.table.ordered_pass.compare_values'] =
   function(...)
-    local TypeRank_Map = { ['string'] = 1, ['number'] = 2, other = 3 }
-    local ComparableTypes_Map = { ['string'] = true, ['number'] = true }
+    local type_rank = { ['string'] = 1, ['number'] = 2 }
+    local rank_other = 3
+    local is_comparable_type = { ['string'] = true, ['number'] = true }
     return
       function(a, b)
         local type_a = type(a)
-        local rank_a = TypeRank_Map[type_a] or TypeRank_Map.other
+        local rank_a = type_rank[type_a] or rank_other
         local type_b = type(b)
-        local rank_b = TypeRank_Map[type_b] or TypeRank_Map.other
+        local rank_b = type_rank[type_b] or rank_other
         if (rank_a ~= rank_b) then
           return (rank_a < rank_b)
         end
         if
-          ComparableTypes_Map[type_a] and ComparableTypes_Map[type_b]
+          is_comparable_type[type_a] and is_comparable_type[type_b]
         then
           return (a < b)
         end
@@ -583,8 +587,8 @@ package.preload['workshop.table.ordered_pass.compare_keys'] =
   function(...)
     local compare_values = request('compare_values')
     return
-      function(A, B)
-        return compare_values(A.key, B.key)
+      function(a, b)
+        return compare_values(a.key, b.key)
       end
   end
 package.preload['workshop.string.starts_with'] =
@@ -601,7 +605,7 @@ package.preload['workshop.string.get_chars_count'] =
     local str_byte = string.byte
     return
       function(str)
-        local UsedChars_Map = {}
+        local UsedChars_Map = { }
         for index = 1, #str do
           local code = str_byte(str_sub(str, index, index))
           if is_nil(UsedChars_Map[code]) then
@@ -620,192 +624,159 @@ package.preload['workshop.convert.table_to_str'] =
       request('!.concepts.codec_lua_graph.compile_graph')
     return
       function(Graph, Options)
-        local StringStream = new(StringOutputStream)
-        compile_graph(Graph, StringStream, Options)
-        return StringStream:GetString()
+        local ResultString = StringOutputStream.create()
+        compile_graph(Graph, ResultString, Options)
+        return ResultString:GetString()
       end
   end
-package.preload['workshop.concepts.Indent'] =
+package.preload['workshop.concepts.range_point'] =
   function(...)
-    local get_indent_chunk =
-      function(Me)
-        return Me[1]
+    local get_min_value =
+      function(me)
+        return me[1]
       end
-    local set_indent_chunk =
-      function(Me, str)
-        Me[1] = str
+    local get_max_value =
+      function(me)
+        return me[2]
       end
+    local get_value
+    local set_value
+    do
+      local constrain = request('!.number.constrain')
+      get_value =
+        function(me)
+          return constrain(me[3], me[1], me[2])
+        end
+      set_value =
+        function(me, value)
+          me[3] = constrain(value, me[1], me[2])
+        end
+    end
+    local interface
+    local create
+    do
+      local attach_methods = request('!.table.attach_methods')
+      create =
+        function(min_value, max_value)
+          local me = { min_value, max_value, min_value }
+          attach_methods(me, interface)
+          return me
+        end
+    end
+    interface =
+      {
+        create = create,
+        get_min_value = get_min_value,
+        get_max_value = get_max_value,
+        get_value = get_value,
+        set_value = set_value,
+      }
+    return interface
+  end
+package.preload['workshop.concepts.indent'] =
+  function(...)
     local get_indent_level =
-      function(Me)
-        return Me[2]:GetValue()
+      function(me)
+        return me[2]:get_value()
       end
     local set_indent_level =
-      function(Me, level)
-        Me[2]:SetValue(level)
-      end
-    local get_max_indent_level =
-      function(Me)
-        return Me[2]:GetMaxValue()
-      end
-    local set_max_indent_level =
-      function(Me, level)
-        Me[2]:SetMaxValue(level)
+      function(me, level)
+        me[2]:set_value(level)
       end
     local to_string
     do
       local str_rep = string.rep
       to_string =
-        function(Me)
-          return str_rep(Me[1], Me[2]:GetValue())
+        function(me)
+          return str_rep(me[1], me[2]:get_value())
         end
     end
     local inc =
-      function(Me)
-        set_indent_level(Me, get_indent_level(Me) + 1)
+      function(me)
+        set_indent_level(me, get_indent_level(me) + 1)
       end
     local dec =
-      function(Me)
-        set_indent_level(Me, get_indent_level(Me) - 1)
+      function(me)
+        set_indent_level(me, get_indent_level(me) - 1)
       end
-    local Interface
+    local interface
     local create
     do
-      local RangePointClass = request('!.concepts.RangePoint')
-      local min_indent = 0
-      local max_indent = 60
-      local indent_chunk = '  '
+      local range_point_class = request('!.concepts.range_point')
       local attach_methods = request('!.table.attach_methods')
       create =
-        function()
-          local RangePoint = RangePointClass.create()
-          RangePoint:SetMinValue(min_indent)
-          RangePoint:SetMaxValue(max_indent)
-          RangePoint:SetValue(min_indent)
-          local Core = { indent_chunk, RangePoint }
-          attach_methods(Core, Interface)
-          return Core
+        function(indent_chunk, min_indent, max_indent)
+          local range_point =
+            range_point_class.create(min_indent, max_indent)
+          local me = { indent_chunk, range_point }
+          attach_methods(me, interface)
+          return me
         end
     end
-    Interface =
+    interface =
       {
         create = create,
-        GetIndentChunk = get_indent_chunk,
-        SetIndentChunk = set_indent_chunk,
-        GetIndentLevel = get_indent_level,
-        SetIndentLevel = set_indent_level,
-        GetMaxIndentLevel = get_max_indent_level,
-        SetMaxIndentLevel = set_max_indent_level,
-        ToString = to_string,
-        Inc = inc,
-        Dec = dec,
+        get_indent_level = get_indent_level,
+        set_indent_level = set_indent_level,
+        to_string = to_string,
+        inc = inc,
+        dec = dec,
       }
-    return Interface
+    return interface
   end
-package.preload['workshop.concepts.RangePoint'] =
-  function(...)
-    local get_min_value =
-      function(Me)
-        return Me[2]
-      end
-    local set_min_value =
-      function(Me, val)
-        Me[2] = val
-      end
-    local get_max_value =
-      function(Me)
-        return Me[3]
-      end
-    local set_max_value =
-      function(Me, val)
-        Me[3] = val
-      end
-    local get_value
-    local set_value
-    do
-      local min = math.min
-      local max = math.max
-      get_value =
-        function(Me)
-          return min(max(Me[1], Me[2]), Me[3])
-        end
-      set_value =
-        function(Me, value)
-          Me[1] = min(max(value, Me[2]), Me[3])
-        end
-    end
-    local Interface
-    local create
-    do
-      local attach_methods = request('!.table.attach_methods')
-      create =
-        function()
-          local Core = { 0, 0, 1 }
-          attach_methods(Core, Interface)
-          return Core
-        end
-    end
-    Interface =
-      {
-        create = create,
-        GetMinValue = get_min_value,
-        SetMinValue = set_min_value,
-        GetMaxValue = get_max_value,
-        SetMaxValue = set_max_value,
-        GetValue = get_value,
-        SetValue = set_value,
-      }
-    return Interface
-  end
-package.preload['workshop.concepts.PaddingPrinter'] =
+package.preload['workshop.concepts.padding_printer'] =
   function(...)
     local inc_indent =
-      function(Me)
-        Me[1]:Inc()
+      function(me)
+        me[1]:inc()
       end
     local dec_indent =
-      function(Me)
-        Me[1]:Dec()
+      function(me)
+        me[1]:dec()
       end
     local newline
     do
-      local newline_char = request('!.concepts.Ascii.Chars').newline
+      local newline_char = request('!.concepts.ascii.chars').newline
       newline =
-        function(Me)
-          Me[2]:Write(newline_char)
-          Me[2]:Write(Me[1]:ToString())
+        function(me)
+          me[2]:Write(newline_char)
+          me[2]:Write(me[1]:to_string())
         end
     end
     local write =
-      function(Me, str)
-        Me[2]:Write(str)
+      function(me, str)
+        me[2]:Write(str)
       end
-    local Interface
+    local interface
     local create
     do
-      local IndentClass = request('!.concepts.Indent')
+      local indent_class = request('!.concepts.indent')
       local attach_methods = request('!.table.attach_methods')
       create =
-        function(Output)
-          local Me = { IndentClass.create(), Output }
-          attach_methods(Me, Interface)
-          return Me
+        function(output, indent_chunk, min_indent, max_indent)
+          local me =
+            {
+              [1] =
+                indent_class.create(
+                  indent_chunk, min_indent, max_indent
+                ),
+              [2] = output,
+            }
+          attach_methods(me, interface)
+          return me
         end
     end
-    Interface =
+    interface =
       {
         create = create,
-        IncIndent = inc_indent,
-        DecIndent = dec_indent,
-        Newline = newline,
-        Write = write,
+        inc_indent = inc_indent,
+        dec_indent = dec_indent,
+        newline = newline,
+        write = write,
       }
-    return Interface
+    return interface
   end
-package.preload['workshop.concepts.lua.NumberTypeNames'] =
-  function(...)
-    return { 'integer', 'float' }
-  end
-package.preload['workshop.concepts.lua.TypeNames'] =
+package.preload['workshop.concepts.lua.type_names'] =
   function(...)
     return
       {
@@ -819,7 +790,7 @@ package.preload['workshop.concepts.lua.TypeNames'] =
         'table',
       }
   end
-package.preload['workshop.concepts.lua.Keywords'] =
+package.preload['workshop.concepts.lua.keywords'] =
   function(...)
     return
       {
@@ -830,6 +801,7 @@ package.preload['workshop.concepts.lua.Keywords'] =
         'and',
         'or',
         'local',
+        'global',
         'do',
         'end',
         'goto',
@@ -850,11 +822,11 @@ package.preload['workshop.concepts.lua.Keywords'] =
 package.preload['workshop.concepts.lua.is_identifier'] =
   function(...)
     local identifier_pattern = '^[%a_][%w_]*$'
-    local Keywords_Map
+    local keywords_map
     do
-      local Keywords = request('Keywords')
+      local keywords = request('keywords')
       local map_values = request('!.table.map_values')
-      Keywords_Map = map_values(Keywords)
+      keywords_map = map_values(keywords)
     end
     local str_match = string.match
     return
@@ -863,24 +835,24 @@ package.preload['workshop.concepts.lua.is_identifier'] =
           return false
         end
         return
-          str_match(str, identifier_pattern) and not Keywords_Map[str]
+          str_match(str, identifier_pattern) and not keywords_map[str]
       end
   end
 package.preload['workshop.concepts.lua.serialize_terminal_value'] =
   function(...)
     local encode_bool =
       function(val)
-        if (val == false) then
-          return 'false'
-        else
+        if val then
           return 'true'
         end
+        return 'false'
       end
     local encode_number
     do
       local is_nan = request('!.number.is_nan')
       local is_pos_inf = request('!.number.is_pos_inf')
       local is_neg_inf = request('!.number.is_neg_inf')
+      local to_string = tostring
       encode_number =
         function(val)
           if is_nan(val) then
@@ -890,7 +862,7 @@ package.preload['workshop.concepts.lua.serialize_terminal_value'] =
           elseif is_neg_inf(val) then
             return '-1/0'
           end
-          return _G.tostring(val)
+          return to_string(val)
         end
     end
     local encode_string
@@ -914,23 +886,9 @@ package.preload['workshop.concepts.lua.serialize_terminal_value'] =
         end
       end
   end
-package.preload['workshop.concepts.lua.QuoteChars'] =
-  function(...)
-    local AsciiCodes = request('!.concepts.Ascii.Codes')
-    local AsciiChars = request('!.concepts.Ascii.Chars')
-    return
-      {
-        single_quote_code = AsciiCodes.single_quote,
-        single_quote = AsciiChars.single_quote,
-        double_quote_code = AsciiCodes.double_quote,
-        double_quote = AsciiChars.double_quote,
-        backslash_code = AsciiCodes.backslash,
-        backslash = AsciiChars.backslash,
-      }
-  end
 package.preload['workshop.concepts.lua.quote_string'] =
   function(...)
-    local BinaryEntitiesLengths_Map =
+    local bin_entities_lengths_map =
       { [1] = true, [2] = true, [4] = true, [8] = true }
     local single_quote_code
     local double_quote_code
@@ -939,21 +897,21 @@ package.preload['workshop.concepts.lua.quote_string'] =
     local double_quote
     local backslash
     do
-      local QuoteChars = request('QuoteChars')
-      single_quote_code = QuoteChars.single_quote_code
-      double_quote_code = QuoteChars.double_quote_code
-      backslash_code = QuoteChars.backslash_code
-      single_quote = QuoteChars.single_quote
-      double_quote = QuoteChars.double_quote
-      backslash = QuoteChars.backslash
+      local quote_chars = request('quote_chars')
+      single_quote_code = quote_chars.single_quote_code
+      double_quote_code = quote_chars.double_quote_code
+      backslash_code = quote_chars.backslash_code
+      single_quote = quote_chars.single_quote
+      double_quote = quote_chars.double_quote
+      backslash = quote_chars.backslash
     end
     local has_messy_control_chars
     do
       local is_control_code =
-        request('!.concepts.Ascii.is_control_code')
+        request('!.concepts.ascii.is_control_code')
       has_messy_control_chars =
-        function(UsedChars)
-          for code in pairs(UsedChars) do
+        function(used_chars)
+          for code in pairs(used_chars) do
             if is_control_code(code) then
               return true
             end
@@ -962,9 +920,9 @@ package.preload['workshop.concepts.lua.quote_string'] =
         end
     end
     local determine_fixed_quote_char =
-      function(UsedChars)
-        local num_single_quotes = UsedChars[single_quote_code] or 0
-        local num_double_quotes = UsedChars[double_quote_code] or 0
+      function(used_chars)
+        local num_single_quotes = used_chars[single_quote_code] or 0
+        local num_double_quotes = used_chars[double_quote_code] or 0
         if (num_single_quotes <= num_double_quotes) then
           return single_quote
         else
@@ -977,14 +935,14 @@ package.preload['workshop.concepts.lua.quote_string'] =
     local str_gsub = string.gsub
     return
       function(str)
-        local UsedChars_Map = get_chars_count(str)
+        local used_chars_map = get_chars_count(str)
         local str_has_messy_control_chars =
-          has_messy_control_chars(UsedChars_Map)
+          has_messy_control_chars(used_chars_map)
         local str_has_messy_printable_chars =
-          UsedChars_Map[backslash_code] or
+          used_chars_map[backslash_code] or
           (
-            UsedChars_Map[single_quote_code] and
-            UsedChars_Map[double_quote_code]
+            used_chars_map[single_quote_code] and
+            used_chars_map[double_quote_code]
           )
         local use_variable_quotes =
           str_has_messy_printable_chars and
@@ -992,11 +950,11 @@ package.preload['workshop.concepts.lua.quote_string'] =
         if use_variable_quotes then
           return quote_variable(str)
         else
-          local quote_char = determine_fixed_quote_char(UsedChars_Map)
+          local quote_char = determine_fixed_quote_char(used_chars_map)
           local quote_all = false
           local quote_control = false
           if str_has_messy_control_chars then
-            if BinaryEntitiesLengths_Map[#str] then
+            if bin_entities_lengths_map[#str] then
               quote_all = true
             else
               quote_control = true
@@ -1015,6 +973,24 @@ package.preload['workshop.concepts.lua.quote_string'] =
         end
       end
   end
+package.preload['workshop.concepts.lua.quote_chars'] =
+  function(...)
+    local ascii_codes = request('!.concepts.ascii.codes')
+    local ascii_chars = request('!.concepts.ascii.chars')
+    return
+      {
+        single_quote_code = ascii_codes.single_quote,
+        single_quote = ascii_chars.single_quote,
+        double_quote_code = ascii_codes.double_quote,
+        double_quote = ascii_chars.double_quote,
+        backslash_code = ascii_codes.backslash,
+        backslash = ascii_chars.backslash,
+      }
+  end
+package.preload['workshop.concepts.lua.number_type_names'] =
+  function(...)
+    return { 'integer', 'float' }
+  end
 package.preload['workshop.concepts.lua.quote_string.intact'] =
   function(...)
     local opening_bracket
@@ -1023,12 +999,12 @@ package.preload['workshop.concepts.lua.quote_string.intact'] =
     local newline_char
     local return_char
     do
-      local AsciiChars = request('!.concepts.Ascii.Chars')
-      opening_bracket = AsciiChars.opening_bracket
-      closing_bracket = AsciiChars.closing_bracket
-      filler_char = AsciiChars.equals
-      newline_char = AsciiChars.newline
-      return_char = AsciiChars.carriage_return
+      local ascii_chars = request('!.concepts.ascii.chars')
+      opening_bracket = ascii_chars.opening_bracket
+      closing_bracket = ascii_chars.closing_bracket
+      filler_char = ascii_chars.equals
+      newline_char = ascii_chars.newline
+      return_char = ascii_chars.carriage_return
     end
     local str_find = string.find
     local str_sub = string.sub
@@ -1098,8 +1074,8 @@ package.preload['workshop.concepts.codec_lua_graph.compile_graph'] =
     return
       function(Graph, Output, Options)
         assert_table(Graph)
-        Options = Options or {}
-        local Settings = {}
+        Options = Options or { }
+        local Settings = { }
         initialize(Settings, Output, Options)
         serialize_ast(Settings, get_ast(Graph))
       end
@@ -1354,15 +1330,15 @@ package.preload[
     local tbl_remove = table.remove
     return
       function(Root)
-        local NamedValues = {}
+        local NamedValues = { }
         local NameGiver = new(NameGiver)
         local NodeRecs, OrderedNodes =
           get_assembly_order(
             Root,
             { also_visit_keys = true, table_iterator = table_iterator }
           )
-        local Result = {}
-        local ProcessedTables = {}
+        local Result = { }
+        local ProcessedTables = { }
         for _, Node in ipairs(OrderedNodes) do
           local NodeRec = NodeRecs[Node]
           if (Node == Root) or not may_print_inline(NodeRec) then
@@ -1449,23 +1425,23 @@ package.preload[
 ] =
   function(...)
     local inc_indent =
-      function(Me)
-        Me[3]:IncIndent()
+      function(me)
+        me[3]:inc_indent()
       end
     local dec_indent =
-      function(Me)
-        Me[3]:DecIndent()
+      function(me)
+        me[3]:dec_indent()
       end
-    local Syntels = request('Syntels')
+    local syntels = request('Syntels')
     local write
     do
       local is_syntax_clash
       do
-        local syntel_start_index = Syntels.start_index
+        local syntel_start_index = syntels.start_index
         local starts_with = request('!.string.starts_with')
         local str_sub = string.sub
         local str_byte = string.byte
-        local is_alnum = request('!.concepts.Ascii.is_alnum')
+        local is_alnum = request('!.concepts.ascii.is_alnum')
         is_syntax_clash =
           function(prev_token, next_token)
             if (prev_token == '') then
@@ -1490,24 +1466,24 @@ package.preload[
             return false
           end
       end
-      local syntel_start_table = Syntels.start_table
-      local syntel_end_table = Syntels.end_table
-      local syntel_assign = Syntels.assign
-      local syntel_item_separator = Syntels.item_separator
-      local syntel_statement_separator = Syntels.statement_separator
-      local syntel_return = Syntels.kw_return
+      local syntel_start_table = syntels.start_table
+      local syntel_end_table = syntels.end_table
+      local syntel_assign = syntels.assign
+      local syntel_item_separator = syntels.item_separator
+      local syntel_statement_separator = syntels.statement_separator
+      local syntel_return = syntels.kw_return
       local space
       local newline
       do
-        local AsciiChars = request('!.concepts.Ascii.Chars')
-        space = AsciiChars.space
-        newline = AsciiChars.newline
+        local ascii_chars = request('!.concepts.ascii.chars')
+        space = ascii_chars.space
+        newline = ascii_chars.newline
       end
       write =
-        function(Me, next_token)
-          local style = Me[1]
-          local prev_token = Me[2]
-          local Printer = Me[3]
+        function(me, next_token)
+          local style = me[1]
+          local prev_token = me[2]
+          local printer = me[3]
           do
             local action_inc_indent = false
             local action_dec_indent = false
@@ -1561,39 +1537,49 @@ package.preload[
               end
             end
             if action_inc_indent then
-              inc_indent(Me)
+              inc_indent(me)
             end
             if action_dec_indent then
-              dec_indent(Me)
+              dec_indent(me)
             end
             if action_emit_space then
-              Printer:Write(space)
+              printer:write(space)
             end
             if action_emit_newline then
-              Printer:Newline()
+              printer:newline()
             end
           end
-          Printer:Write(next_token)
-          Me[2] = next_token
+          printer:write(next_token)
+          me[2] = next_token
         end
     end
-    local Interface
+    local interface
     do
       local create
       do
-        local PaddingPrinter = request('!.concepts.PaddingPrinter')
+        local indent_chunk = '  '
+        local min_indent = 0
+        local max_indent = 60
+        local padding_printer = request('!.concepts.padding_printer')
         local attach_methods = request('!.table.attach_methods')
         create =
-          function(BaseOutputStream, style)
-            assert_table(BaseOutputStream)
+          function(base_output, style)
+            assert_table(base_output)
             assert_string(style)
-            local Me =
-              { style, '', PaddingPrinter.create(BaseOutputStream) }
-            attach_methods(Me, Interface)
-            return Me
+            local me =
+              {
+                [1] = style,
+                [2] = '',
+                [3] =
+                  padding_printer.create(
+                    base_output, indent_chunk, min_indent, max_indent
+                  ),
+              }
+            attach_methods(me, interface)
+            return me
           end
       end
-      Interface =
+      interface =
         {
           create = create,
           Write = write,
@@ -1601,7 +1587,7 @@ package.preload[
           DecIndent = dec_indent,
         }
     end
-    return Interface
+    return interface
   end
 package.preload[
   'workshop.concepts.codec_lua_graph.compile.serialize_graph_ast'
@@ -1713,7 +1699,7 @@ package.preload[
       local add_to_list = request('!.concepts.list.add_item')
       get_tree_ast =
         function(Data, NamedValues)
-          NamedValues = NamedValues or {}
+          NamedValues = NamedValues or { }
           if NamedValues[Data] then
             return create_name_rec(NamedValues[Data])
           end
@@ -1783,7 +1769,7 @@ package.preload['workshop.concepts.codec_lua_graph.compile.Ast.Methods'] =
         end
       create_table_rec =
         function()
-          return { type_table, {} }
+          return { type_table, { } }
         end
       create_local_def_rec =
         function(name, Value)
@@ -1808,20 +1794,51 @@ package.preload['workshop.concepts.codec_lua_graph.compile.Ast.Methods'] =
         create_return_rec = create_return_rec,
       }
   end
-package.preload['workshop.concepts.Ascii.Chars'] =
+package.preload['workshop.concepts.StreamIo.Output.String'] =
   function(...)
-    local Chars
+    local write
     do
-      local Codes = request('Codes')
-      local str_char = string.char
-      Chars = {}
-      for name, code in pairs(Codes) do
-        Chars[name] = str_char(code)
-      end
+      local add_to = request('!.concepts.list.add_item')
+      write =
+        function(Me, data_str)
+          assert_string(data_str)
+          add_to(Me, data_str)
+        end
     end
-    return Chars
+    local get_string
+    do
+      local list_to_string = request('!.concepts.list.to_string')
+      get_string =
+        function(Me)
+          return list_to_string(Me)
+        end
+    end
+    local Interface
+    local create
+    do
+      local attach_methods = request('!.table.attach_methods')
+      create =
+        function()
+          local Me = { }
+          attach_methods(Me, Interface)
+          return Me
+        end
+    end
+    Interface =
+      { create = create, Write = write, GetString = get_string }
+    return create()
   end
-package.preload['workshop.concepts.Ascii.is_alnum'] =
+package.preload['workshop.concepts.ascii.chars'] =
+  function(...)
+    local codes = request('codes')
+    local str_char = string.char
+    chars = { }
+    for name, code in pairs(codes) do
+      chars[name] = str_char(code)
+    end
+    return chars
+  end
+package.preload['workshop.concepts.ascii.is_alnum'] =
   function(...)
     return
       function(code)
@@ -1831,7 +1848,14 @@ package.preload['workshop.concepts.Ascii.is_alnum'] =
           ((code >= 48) and (code <= 57))
       end
   end
-package.preload['workshop.concepts.Ascii.Codes'] =
+package.preload['workshop.concepts.ascii.is_control_code'] =
+  function(...)
+    return
+      function(code)
+        return (code <= 31) or (code == 127)
+      end
+  end
+package.preload['workshop.concepts.ascii.codes'] =
   function(...)
     return
       {
@@ -1877,46 +1901,5 @@ package.preload['workshop.concepts.Ascii.Codes'] =
         opening_brace = 123,
         closing_brace = 125,
       }
-  end
-package.preload['workshop.concepts.Ascii.is_control_code'] =
-  function(...)
-    return
-      function(code)
-        return (code <= 31) or (code == 127)
-      end
-  end
-package.preload['workshop.concepts.StreamIo.Output.String'] =
-  function(...)
-    local write
-    do
-      local add_to = request('!.concepts.list.add_item')
-      write =
-        function(Me, data_str)
-          assert_string(data_str)
-          add_to(Me, data_str)
-        end
-    end
-    local get_string
-    do
-      local list_to_string = request('!.concepts.list.to_string')
-      get_string =
-        function(Me)
-          return list_to_string(Me)
-        end
-    end
-    local Interface
-    local create
-    do
-      local attach_methods = request('!.table.attach_methods')
-      create =
-        function()
-          local Me = {}
-          attach_methods(Me, Interface)
-          return Me
-        end
-    end
-    Interface =
-      { create = create, Write = write, GetString = get_string }
-    return create()
   end
 return require('serialize_lua_graph')
