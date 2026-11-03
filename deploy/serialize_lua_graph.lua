@@ -26,7 +26,7 @@ package.preload['workshop.base'] =
         local depth
         stack_init =
           function()
-            Names = {}
+            Names = { }
             depth = 1
           end
         stack_get =
@@ -212,7 +212,7 @@ package.preload['workshop.mechs.name_giver'] =
     local str_format = string.format
     return
       {
-        Names = {},
+        Names = { },
         Counters =
           {
             ['function'] = 0,
@@ -249,8 +249,8 @@ package.preload['workshop.mechs.graph.assembly_order'] =
     local dfs = request('dfs')
     return
       function(graph, options)
-        options = options or {}
-        local assembly_order_seq = {}
+        options = options or { }
+        local assembly_order_seq = { }
         options.handle_leave =
           function(node, node_rec, deep)
             assembly_order_seq[#assembly_order_seq + 1] = node
@@ -269,7 +269,7 @@ package.preload['workshop.mechs.graph.dfs.get_children'] =
       function(Me, Node)
         local also_visit_keys = Me.also_visit_keys
         local KeyVals = get_key_vals(Node)
-        local Result = {}
+        local Result = { }
         for _, Rec in ipairs(KeyVals) do
           if is_table(Rec.value) then
             add_to_list(Result, Rec)
@@ -286,7 +286,7 @@ package.preload['workshop.mechs.graph.dfs.dfs'] =
   function(...)
     return
       function(self, graph)
-        self.nodes_status = {}
+        self.nodes_status = { }
         local handle_discovery = self.handle_discovery
         local handle_leave = self.handle_leave
         local nodes_status = self.nodes_status
@@ -301,8 +301,8 @@ package.preload['workshop.mechs.graph.dfs.dfs'] =
           function(parent, parent_key, node, depth)
             init_node_rec(node)
             local node_rec = nodes_status[node]
-            node_rec.refs = node_rec.refs or {}
-            node_rec.refs[parent] = node_rec.refs[parent] or {}
+            node_rec.refs = node_rec.refs or { }
+            node_rec.refs[parent] = node_rec.refs[parent] or { }
             node_rec.refs[parent][parent_key] = true
             if not node_rec.color then
               node_rec.parent = parent
@@ -345,7 +345,7 @@ package.preload['workshop.mechs.graph.dfs.interface'] =
         also_visit_keys = false,
         table_iterator = request('!.table.ordered_pass'),
         run = request('dfs'),
-        nodes_status = {},
+        nodes_status = { },
       }
   end
 package.preload['workshop.number.is_neg_inf'] =
@@ -375,7 +375,7 @@ package.preload['workshop.table.clone'] =
       function(Node)
         local clone
         do
-          local Cloned = {}
+          local Cloned = { }
           clone =
             function(Node)
               if (type(Node) ~= 'table') then
@@ -384,7 +384,7 @@ package.preload['workshop.table.clone'] =
               if Cloned[Node] then
                 return Cloned[Node]
               end
-              local Result = {}
+              local Result = { }
               Cloned[Node] = Result
               for key, value in pairs(Node) do
                 Result[clone(key)] = clone(value)
@@ -424,7 +424,7 @@ package.preload['workshop.table.invert'] =
     return
       function(Table)
         assert_table(Table)
-        local Result = {}
+        local Result = { }
         for Key, Value in pairs(Table) do
           Result[Value] = Key
         end
@@ -436,7 +436,7 @@ package.preload['workshop.table.map_values'] =
     return
       function(List)
         assert_table(List)
-        local Result = {}
+        local Result = { }
         for _, value in pairs(List) do
           Result[value] = true
         end
@@ -449,7 +449,7 @@ package.preload['workshop.table.get_key_vals'] =
     return
       function(Table)
         assert_table(Table)
-        local KeyVals = {}
+        local KeyVals = { }
         for key, value in pairs(Table) do
           add_to_list(KeyVals, { key = key, value = value })
         end
@@ -473,7 +473,7 @@ package.preload['workshop.table.apply_table'] =
     local apply_table
     apply_table =
       function(A, B, Rules)
-        local Keys = {}
+        local Keys = { }
         do
           for a_key in pairs(A) do
             Keys[a_key] = true
@@ -560,14 +560,15 @@ package.preload['workshop.table.attach_methods'] =
   end
 package.preload['workshop.table.ordered_pass.compare_values'] =
   function(...)
-    local TypeRank_Map = { ['string'] = 1, ['number'] = 2, other = 3 }
+    local TypeRank_Map = { ['string'] = 1, ['number'] = 2 }
+    local rank_other = 3
     local ComparableTypes_Map = { ['string'] = true, ['number'] = true }
     return
       function(a, b)
         local type_a = type(a)
-        local rank_a = TypeRank_Map[type_a] or TypeRank_Map.other
+        local rank_a = TypeRank_Map[type_a] or rank_other
         local type_b = type(b)
-        local rank_b = TypeRank_Map[type_b] or TypeRank_Map.other
+        local rank_b = TypeRank_Map[type_b] or rank_other
         if (rank_a ~= rank_b) then
           return (rank_a < rank_b)
         end
@@ -601,7 +602,7 @@ package.preload['workshop.string.get_chars_count'] =
     local str_byte = string.byte
     return
       function(str)
-        local UsedChars_Map = {}
+        local UsedChars_Map = { }
         for index = 1, #str do
           local code = str_byte(str_sub(str, index, index))
           if is_nil(UsedChars_Map[code]) then
@@ -620,9 +621,9 @@ package.preload['workshop.convert.table_to_str'] =
       request('!.concepts.codec_lua_graph.compile_graph')
     return
       function(Graph, Options)
-        local StringStream = new(StringOutputStream)
-        compile_graph(Graph, StringStream, Options)
-        return StringStream:GetString()
+        local ResultString = StringOutputStream.create()
+        compile_graph(Graph, ResultString, Options)
+        return ResultString:GetString()
       end
   end
 package.preload['workshop.concepts.Indent'] =
@@ -830,6 +831,7 @@ package.preload['workshop.concepts.lua.Keywords'] =
         'and',
         'or',
         'local',
+        'global',
         'do',
         'end',
         'goto',
@@ -870,17 +872,17 @@ package.preload['workshop.concepts.lua.serialize_terminal_value'] =
   function(...)
     local encode_bool =
       function(val)
-        if (val == false) then
-          return 'false'
-        else
+        if val then
           return 'true'
         end
+        return 'false'
       end
     local encode_number
     do
       local is_nan = request('!.number.is_nan')
       local is_pos_inf = request('!.number.is_pos_inf')
       local is_neg_inf = request('!.number.is_neg_inf')
+      local to_string = tostring
       encode_number =
         function(val)
           if is_nan(val) then
@@ -890,7 +892,7 @@ package.preload['workshop.concepts.lua.serialize_terminal_value'] =
           elseif is_neg_inf(val) then
             return '-1/0'
           end
-          return _G.tostring(val)
+          return to_string(val)
         end
     end
     local encode_string
@@ -1098,8 +1100,8 @@ package.preload['workshop.concepts.codec_lua_graph.compile_graph'] =
     return
       function(Graph, Output, Options)
         assert_table(Graph)
-        Options = Options or {}
-        local Settings = {}
+        Options = Options or { }
+        local Settings = { }
         initialize(Settings, Output, Options)
         serialize_ast(Settings, get_ast(Graph))
       end
@@ -1354,15 +1356,15 @@ package.preload[
     local tbl_remove = table.remove
     return
       function(Root)
-        local NamedValues = {}
+        local NamedValues = { }
         local NameGiver = new(NameGiver)
         local NodeRecs, OrderedNodes =
           get_assembly_order(
             Root,
             { also_visit_keys = true, table_iterator = table_iterator }
           )
-        local Result = {}
-        local ProcessedTables = {}
+        local Result = { }
+        local ProcessedTables = { }
         for _, Node in ipairs(OrderedNodes) do
           local NodeRec = NodeRecs[Node]
           if (Node == Root) or not may_print_inline(NodeRec) then
@@ -1713,7 +1715,7 @@ package.preload[
       local add_to_list = request('!.concepts.list.add_item')
       get_tree_ast =
         function(Data, NamedValues)
-          NamedValues = NamedValues or {}
+          NamedValues = NamedValues or { }
           if NamedValues[Data] then
             return create_name_rec(NamedValues[Data])
           end
@@ -1783,7 +1785,7 @@ package.preload['workshop.concepts.codec_lua_graph.compile.Ast.Methods'] =
         end
       create_table_rec =
         function()
-          return { type_table, {} }
+          return { type_table, { } }
         end
       create_local_def_rec =
         function(name, Value)
@@ -1814,7 +1816,7 @@ package.preload['workshop.concepts.Ascii.Chars'] =
     do
       local Codes = request('Codes')
       local str_char = string.char
-      Chars = {}
+      Chars = { }
       for name, code in pairs(Codes) do
         Chars[name] = str_char(code)
       end
@@ -1910,7 +1912,7 @@ package.preload['workshop.concepts.StreamIo.Output.String'] =
       local attach_methods = request('!.table.attach_methods')
       create =
         function()
-          local Me = {}
+          local Me = { }
           attach_methods(Me, Interface)
           return Me
         end
